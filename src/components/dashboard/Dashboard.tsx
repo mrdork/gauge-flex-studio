@@ -44,10 +44,10 @@ export const Dashboard: React.FC = () => {
       <div className="min-h-screen bg-dashboard-grid p-6">
         <div className="mb-6">
           <h1 className="text-2xl font-bold text-foreground mb-2">Tech Dashboard</h1>
-          <p className="text-muted-foreground">Drag widgets by their title bar • Resize by dragging the corner • Widgets snap to each other and grid</p>
+          <p className="text-muted-foreground">Drag widgets to reposition • Resize by dragging the corner • Widgets push each other away automatically</p>
         </div>
 
-        <div className="relative w-full h-[calc(100vh-120px)]">
+        <div className="relative w-full h-[calc(100vh-100px)] overflow-hidden">
           {/* Metric Widgets */}
           <ResizableWidget title="Schedules Today" initialWidth={250} initialHeight={200} initialX={20} initialY={20}>
             <MetricWidget
