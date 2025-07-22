@@ -16,6 +16,7 @@ interface ResizableWidgetProps {
   id: string;
   onMove: (id: string, x: number, y: number) => void;
   onResize: (id: string, width: number, height: number) => void;
+  gridSize?: number;
 }
 
 export const ResizableWidget: React.FC<ResizableWidgetProps> = ({
@@ -32,7 +33,8 @@ export const ResizableWidget: React.FC<ResizableWidgetProps> = ({
   className,
   id,
   onMove,
-  onResize
+  onResize,
+  gridSize = 20
 }) => {
   const [position, setPosition] = useState({ x: initialX, y: initialY, width: initialWidth, height: initialHeight });
   const [isResizing, setIsResizing] = useState(false);
@@ -40,6 +42,9 @@ export const ResizableWidget: React.FC<ResizableWidgetProps> = ({
   const widgetRef = useRef<HTMLDivElement>(null);
   const dragRef = useRef<{ startX: number; startY: number; startMouseX: number; startMouseY: number } | null>(null);
   const resizeRef = useRef<{ startX: number; startY: number; startWidth: number; startHeight: number } | null>(null);
+
+  // Helper to snap to grid
+  const snapToGrid = (value: number) => Math.round(value / gridSize) * gridSize;
 
   // Update local position when external position changes
   useEffect(() => {
@@ -77,8 +82,12 @@ export const ResizableWidget: React.FC<ResizableWidgetProps> = ({
       const deltaX = moveEvent.clientX - dragRef.current.startMouseX;
       const deltaY = moveEvent.clientY - dragRef.current.startMouseY;
 
-      const newX = Math.max(0, dragRef.current.startX + deltaX);
-      const newY = Math.max(0, dragRef.current.startY + deltaY);
+      const rawX = Math.max(0, dragRef.current.startX + deltaX);
+      const rawY = Math.max(0, dragRef.current.startY + deltaY);
+      
+      // Snap to grid
+      const newX = snapToGrid(rawX);
+      const newY = snapToGrid(rawY);
 
       // Update local position for smooth dragging
       setPosition(prev => ({ ...prev, x: newX, y: newY }));
@@ -119,8 +128,12 @@ export const ResizableWidget: React.FC<ResizableWidgetProps> = ({
       const deltaX = moveEvent.clientX - resizeRef.current.startX;
       const deltaY = moveEvent.clientY - resizeRef.current.startY;
 
-      const newWidth = Math.max(minWidth, Math.min(maxWidth, resizeRef.current.startWidth + deltaX));
-      const newHeight = Math.max(minHeight, Math.min(maxHeight, resizeRef.current.startHeight + deltaY));
+      const rawWidth = Math.max(minWidth, Math.min(maxWidth, resizeRef.current.startWidth + deltaX));
+      const rawHeight = Math.max(minHeight, Math.min(maxHeight, resizeRef.current.startHeight + deltaY));
+      
+      // Snap to grid
+      const newWidth = snapToGrid(rawWidth);
+      const newHeight = snapToGrid(rawHeight);
 
       // Update local size for smooth resizing
       setPosition(prev => ({ ...prev, width: newWidth, height: newHeight }));

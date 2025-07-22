@@ -383,6 +383,7 @@ export const Dashboard: React.FC = () => {
             initialY={widget.y}
             initialWidth={widget.width}
             initialHeight={widget.height}
+            gridSize={GRID_SIZE}
             onMove={handleWidgetMove}
             onResize={handleWidgetResize}
           >
