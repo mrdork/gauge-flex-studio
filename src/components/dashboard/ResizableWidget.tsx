@@ -1,11 +1,14 @@
-import React, { useState, useRef, useCallback } from 'react';
+import React, { useState, useRef, useCallback, useEffect } from 'react';
 import { cn } from '@/lib/utils';
+import { useGridLayout } from './GridLayoutManager';
 
 interface ResizableWidgetProps {
   children: React.ReactNode;
   title?: string;
   initialWidth?: number;
   initialHeight?: number;
+  initialX?: number;
+  initialY?: number;
   minWidth?: number;
   minHeight?: number;
   maxWidth?: number;
@@ -18,66 +21,152 @@ export const ResizableWidget: React.FC<ResizableWidgetProps> = ({
   title,
   initialWidth = 300,
   initialHeight = 200,
+  initialX = 0,
+  initialY = 0,
   minWidth = 200,
   minHeight = 150,
   maxWidth = 800,
   maxHeight = 600,
   className
 }) => {
-  const [size, setSize] = useState({ width: initialWidth, height: initialHeight });
+  const widgetId = useRef(`widget-${Math.random().toString(36).substr(2, 9)}`).current;
+  const { registerWidget, updateWidget, removeWidget, checkCollision, getSnappedPosition } = useGridLayout();
+  
+  const [position, setPosition] = useState({ x: initialX, y: initialY, width: initialWidth, height: initialHeight });
   const [isResizing, setIsResizing] = useState(false);
+  const [isDragging, setIsDragging] = useState(false);
   const widgetRef = useRef<HTMLDivElement>(null);
+  const dragRef = useRef<{ startX: number; startY: number; startMouseX: number; startMouseY: number } | null>(null);
   const resizeRef = useRef<{ startX: number; startY: number; startWidth: number; startHeight: number } | null>(null);
 
-  const handleMouseDown = useCallback((e: React.MouseEvent) => {
+  // Register widget with grid layout
+  useEffect(() => {
+    registerWidget(widgetId, { ...position, id: widgetId });
+    return () => removeWidget(widgetId);
+  }, []);
+
+  // Update grid layout when position changes
+  useEffect(() => {
+    updateWidget(widgetId, position);
+  }, [position]);
+
+  const handleDragMouseDown = useCallback((e: React.MouseEvent) => {
+    if (e.target !== e.currentTarget) return; // Only drag from header
     e.preventDefault();
+    setIsDragging(true);
+    
+    dragRef.current = {
+      startX: position.x,
+      startY: position.y,
+      startMouseX: e.clientX,
+      startMouseY: e.clientY
+    };
+
+    const handleDragMove = (moveEvent: MouseEvent) => {
+      if (!dragRef.current) return;
+
+      const deltaX = moveEvent.clientX - dragRef.current.startMouseX;
+      const deltaY = moveEvent.clientY - dragRef.current.startMouseY;
+
+      let newX = Math.max(0, dragRef.current.startX + deltaX);
+      let newY = Math.max(0, dragRef.current.startY + deltaY);
+
+      // Get snapped position
+      const snapped = getSnappedPosition(widgetId, { x: newX, y: newY });
+      if (snapped.x !== undefined) newX = snapped.x;
+      if (snapped.y !== undefined) newY = snapped.y;
+
+      // Check for collision at the snapped position
+      const wouldCollide = checkCollision(widgetId, { x: newX, y: newY });
+      
+      if (!wouldCollide) {
+        setPosition(prev => ({ ...prev, x: newX, y: newY }));
+      }
+    };
+
+    const handleDragUp = () => {
+      setIsDragging(false);
+      dragRef.current = null;
+      document.removeEventListener('mousemove', handleDragMove);
+      document.removeEventListener('mouseup', handleDragUp);
+    };
+
+    document.addEventListener('mousemove', handleDragMove);
+    document.addEventListener('mouseup', handleDragUp);
+  }, [position, widgetId, getSnappedPosition, checkCollision]);
+
+  const handleResizeMouseDown = useCallback((e: React.MouseEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
     setIsResizing(true);
     
     resizeRef.current = {
       startX: e.clientX,
       startY: e.clientY,
-      startWidth: size.width,
-      startHeight: size.height
+      startWidth: position.width,
+      startHeight: position.height
     };
 
-    const handleMouseMove = (moveEvent: MouseEvent) => {
+    const handleResizeMove = (moveEvent: MouseEvent) => {
       if (!resizeRef.current) return;
 
       const deltaX = moveEvent.clientX - resizeRef.current.startX;
       const deltaY = moveEvent.clientY - resizeRef.current.startY;
 
-      const newWidth = Math.max(minWidth, Math.min(maxWidth, resizeRef.current.startWidth + deltaX));
-      const newHeight = Math.max(minHeight, Math.min(maxHeight, resizeRef.current.startHeight + deltaY));
+      let newWidth = Math.max(minWidth, Math.min(maxWidth, resizeRef.current.startWidth + deltaX));
+      let newHeight = Math.max(minHeight, Math.min(maxHeight, resizeRef.current.startHeight + deltaY));
 
-      setSize({ width: newWidth, height: newHeight });
+      // Get snapped size
+      const snapped = getSnappedPosition(widgetId, { width: newWidth, height: newHeight });
+      if (snapped.width !== undefined) newWidth = snapped.width;
+      if (snapped.height !== undefined) newHeight = snapped.height;
+
+      // Check for collision with new size
+      const wouldCollide = checkCollision(widgetId, { width: newWidth, height: newHeight });
+      
+      if (!wouldCollide) {
+        setPosition(prev => ({ ...prev, width: newWidth, height: newHeight }));
+      }
     };
 
-    const handleMouseUp = () => {
+    const handleResizeUp = () => {
       setIsResizing(false);
       resizeRef.current = null;
-      document.removeEventListener('mousemove', handleMouseMove);
-      document.removeEventListener('mouseup', handleMouseUp);
+      document.removeEventListener('mousemove', handleResizeMove);
+      document.removeEventListener('mouseup', handleResizeUp);
     };
 
-    document.addEventListener('mousemove', handleMouseMove);
-    document.addEventListener('mouseup', handleMouseUp);
-  }, [size, minWidth, minHeight, maxWidth, maxHeight]);
+    document.addEventListener('mousemove', handleResizeMove);
+    document.addEventListener('mouseup', handleResizeUp);
+  }, [position, minWidth, minHeight, maxWidth, maxHeight, widgetId, getSnappedPosition, checkCollision]);
 
   return (
     <div
       ref={widgetRef}
       className={cn(
-        'relative bg-widget border border-widget-border rounded-lg shadow-sm overflow-hidden',
+        'absolute bg-widget border border-widget-border rounded-lg shadow-sm overflow-hidden',
         'transition-all duration-200',
-        isResizing && 'shadow-lg ring-2 ring-resize-active border-resize-active',
+        (isResizing || isDragging) && 'shadow-lg ring-2 ring-resize-active border-resize-active z-50',
+        isDragging && 'cursor-move',
         className
       )}
-      style={{ width: size.width, height: size.height }}
+      style={{ 
+        left: position.x, 
+        top: position.y,
+        width: position.width, 
+        height: position.height 
+      }}
     >
       {/* Header */}
       {title && (
-        <div className="px-4 py-3 border-b border-widget-border bg-muted/30">
-          <h3 className="text-sm font-medium text-foreground">{title}</h3>
+        <div 
+          className={cn(
+            "px-4 py-3 border-b border-widget-border bg-muted/30 cursor-move",
+            isDragging && "cursor-grabbing"
+          )}
+          onMouseDown={handleDragMouseDown}
+        >
+          <h3 className="text-sm font-medium text-foreground select-none">{title}</h3>
         </div>
       )}
 
@@ -97,7 +186,7 @@ export const ResizableWidget: React.FC<ResizableWidgetProps> = ({
           'opacity-0 hover:opacity-100',
           isResizing && 'opacity-100 bg-resize-active'
         )}
-        onMouseDown={handleMouseDown}
+        onMouseDown={handleResizeMouseDown}
       >
         <div className="absolute bottom-1 right-1 w-3 h-3">
           <div className="absolute bottom-0 right-0 w-1 h-3 bg-current"></div>
@@ -107,11 +196,9 @@ export const ResizableWidget: React.FC<ResizableWidgetProps> = ({
         </div>
       </div>
 
-      {/* Resize borders (visible during resize) */}
-      {isResizing && (
-        <>
-          <div className="absolute inset-0 border-2 border-resize-active rounded-lg pointer-events-none"></div>
-        </>
+      {/* Visual feedback during resize/drag */}
+      {(isResizing || isDragging) && (
+        <div className="absolute inset-0 border-2 border-resize-active rounded-lg pointer-events-none"></div>
       )}
     </div>
   );

@@ -3,6 +3,7 @@ import { ResizableWidget } from './ResizableWidget';
 import { MetricWidget } from './MetricWidget';
 import { ChartWidget } from './ChartWidget';
 import { TableWidget } from './TableWidget';
+import { GridLayoutProvider } from './GridLayoutManager';
 
 // Sample data
 const sampleTableData = [
@@ -39,111 +40,109 @@ const tableColumns = [
 
 export const Dashboard: React.FC = () => {
   return (
-    <div className="min-h-screen bg-dashboard-grid p-6">
-      <div className="mb-6">
-        <h1 className="text-2xl font-bold text-foreground mb-2">Tech Dashboard</h1>
-        <p className="text-muted-foreground">Resize any widget by dragging the corner handle</p>
+    <GridLayoutProvider gridSize={20} snapThreshold={15}>
+      <div className="min-h-screen bg-dashboard-grid p-6">
+        <div className="mb-6">
+          <h1 className="text-2xl font-bold text-foreground mb-2">Tech Dashboard</h1>
+          <p className="text-muted-foreground">Drag widgets by their title bar • Resize by dragging the corner • Widgets snap to each other</p>
+        </div>
+
+        <div className="relative w-full h-[calc(100vh-120px)]">
+          {/* Metric Widgets */}
+          <ResizableWidget title="Schedules Today" initialWidth={250} initialHeight={200} initialX={20} initialY={20}>
+            <MetricWidget
+              value="4"
+              label="MINS AGO"
+              size="lg"
+              variant="primary"
+            />
+          </ResizableWidget>
+
+          <ResizableWidget title="Open Tickets" initialWidth={250} initialHeight={200} initialX={290} initialY={20}>
+            <MetricWidget
+              value="3.69K"
+              label="4 MINS AGO"
+              size="lg"
+              variant="primary"
+            />
+          </ResizableWidget>
+
+          <ResizableWidget title="Stale Tickets" initialWidth={250} initialHeight={200} initialX={560} initialY={20}>
+            <MetricWidget
+              value="3.60K"
+              label="4 MINS AGO"
+              change={{ value: -2.5, period: 'vs last week' }}
+              size="lg"
+              variant="danger"
+            />
+          </ResizableWidget>
+
+          <ResizableWidget title="Overdue" initialWidth={250} initialHeight={200} initialX={830} initialY={20}>
+            <MetricWidget
+              value="471"
+              label="3 MINS AGO"
+              change={{ value: 15.2, period: 'vs last month' }}
+              size="lg"
+              variant="danger"
+            />
+          </ResizableWidget>
+
+          {/* Chart Widgets */}
+          <ResizableWidget title="Tickets By Company" initialWidth={400} initialHeight={300} initialX={20} initialY={240}>
+            <ChartWidget
+              type="bar"
+              data={sampleBarData}
+            />
+          </ResizableWidget>
+
+          <ResizableWidget title="Worked On - Today" initialWidth={300} initialHeight={300} initialX={440} initialY={240}>
+            <ChartWidget
+              type="donut"
+              data={sampleChartData}
+            />
+          </ResizableWidget>
+
+          <ResizableWidget title="Resolved Today" initialWidth={250} initialHeight={200} initialX={760} initialY={240}>
+            <MetricWidget
+              value="182"
+              label="4 MINS AGO"
+              change={{ value: 8.7, period: 'vs yesterday' }}
+              size="lg"
+              variant="secondary"
+            />
+          </ResizableWidget>
+
+          {/* Critical Tickets Chart */}
+          <ResizableWidget title="Open Tickets - Critical" initialWidth={400} initialHeight={320} initialX={20} initialY={560}>
+            <ChartWidget
+              type="bar"
+              data={[
+                { name: 'Urgent', value: 20 },
+                { name: 'High', value: 15 },
+                { name: 'Medium', value: 8 },
+                { name: 'Low', value: 2 }
+              ]}
+            />
+          </ResizableWidget>
+
+          {/* Table Widget */}
+          <ResizableWidget title="Recent Tickets" initialWidth={500} initialHeight={350} initialX={440} initialY={560}>
+            <TableWidget
+              columns={tableColumns}
+              data={sampleTableData}
+              maxRows={8}
+            />
+          </ResizableWidget>
+
+          {/* Pie Chart */}
+          <ResizableWidget title="Priority Distribution" initialWidth={350} initialHeight={300} initialX={760} initialY={460}>
+            <ChartWidget
+              type="pie"
+              data={sampleChartData}
+            />
+          </ResizableWidget>
+        </div>
       </div>
-
-      <div className="grid gap-6 auto-fit" style={{ 
-        display: 'grid',
-        gridTemplateColumns: 'repeat(auto-fit, minmax(300px, 1fr))',
-        alignItems: 'start'
-      }}>
-        {/* Metric Widgets */}
-        <ResizableWidget title="Schedules Today" initialWidth={250} initialHeight={200}>
-          <MetricWidget
-            value="4"
-            label="MINS AGO"
-            size="lg"
-            variant="primary"
-          />
-        </ResizableWidget>
-
-        <ResizableWidget title="Open Tickets" initialWidth={250} initialHeight={200}>
-          <MetricWidget
-            value="3.69K"
-            label="4 MINS AGO"
-            size="lg"
-            variant="primary"
-          />
-        </ResizableWidget>
-
-        <ResizableWidget title="Stale Tickets" initialWidth={250} initialHeight={200}>
-          <MetricWidget
-            value="3.60K"
-            label="4 MINS AGO"
-            change={{ value: -2.5, period: 'vs last week' }}
-            size="lg"
-            variant="danger"
-          />
-        </ResizableWidget>
-
-        <ResizableWidget title="Overdue" initialWidth={250} initialHeight={200}>
-          <MetricWidget
-            value="471"
-            label="3 MINS AGO"
-            change={{ value: 15.2, period: 'vs last month' }}
-            size="lg"
-            variant="danger"
-          />
-        </ResizableWidget>
-
-        {/* Chart Widgets */}
-        <ResizableWidget title="Tickets By Company" initialWidth={400} initialHeight={300}>
-          <ChartWidget
-            type="bar"
-            data={sampleBarData}
-          />
-        </ResizableWidget>
-
-        <ResizableWidget title="Worked On - Today" initialWidth={300} initialHeight={300}>
-          <ChartWidget
-            type="donut"
-            data={sampleChartData}
-          />
-        </ResizableWidget>
-
-        <ResizableWidget title="Resolved Today" initialWidth={250} initialHeight={200}>
-          <MetricWidget
-            value="182"
-            label="4 MINS AGO"
-            change={{ value: 8.7, period: 'vs yesterday' }}
-            size="lg"
-            variant="secondary"
-          />
-        </ResizableWidget>
-
-        {/* Critical Tickets Chart */}
-        <ResizableWidget title="Open Tickets - Critical" initialWidth={400} initialHeight={320}>
-          <ChartWidget
-            type="bar"
-            data={[
-              { name: 'Urgent', value: 20 },
-              { name: 'High', value: 15 },
-              { name: 'Medium', value: 8 },
-              { name: 'Low', value: 2 }
-            ]}
-          />
-        </ResizableWidget>
-
-        {/* Table Widget */}
-        <ResizableWidget title="Recent Tickets" initialWidth={500} initialHeight={350}>
-          <TableWidget
-            columns={tableColumns}
-            data={sampleTableData}
-            maxRows={8}
-          />
-        </ResizableWidget>
-
-        {/* Pie Chart */}
-        <ResizableWidget title="Priority Distribution" initialWidth={350} initialHeight={300}>
-          <ChartWidget
-            type="pie"
-            data={sampleChartData}
-          />
-        </ResizableWidget>
-      </div>
-    </div>
+    </GridLayoutProvider>
   );
 };
