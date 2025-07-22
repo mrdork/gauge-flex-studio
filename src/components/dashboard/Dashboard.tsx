@@ -3,39 +3,11 @@ import { ResizableWidget } from './ResizableWidget';
 import { MetricWidget } from './MetricWidget';
 import { ChartWidget } from './ChartWidget';
 import { TableWidget } from './TableWidget';
-
-// Sample data
-const sampleTableData = [
-  { company: 'Tech Corp', tickets: 45, priority: 'High', status: 'Open' },
-  { company: 'Data Inc', tickets: 23, priority: 'Medium', status: 'In Progress' },
-  { company: 'Cloud Systems', tickets: 67, priority: 'Low', status: 'Resolved' },
-  { company: 'AI Solutions', tickets: 12, priority: 'High', status: 'Open' },
-  { company: 'Web Dev Co', tickets: 34, priority: 'Medium', status: 'Closed' },
-];
-
-const sampleChartData = [
-  { name: 'Critical', value: 4 },
-  { name: 'High', value: 15 },
-  { name: 'Medium', value: 8 },
-  { name: 'Low', value: 3 },
-];
-
-const sampleBarData = [
-  { name: 'Mon', value: 12 },
-  { name: 'Tue', value: 19 },
-  { name: 'Wed', value: 15 },
-  { name: 'Thu', value: 22 },
-  { name: 'Fri', value: 18 },
-  { name: 'Sat', value: 8 },
-  { name: 'Sun', value: 5 },
-];
-
-const tableColumns = [
-  { key: 'company', label: 'Company', width: '40%' },
-  { key: 'tickets', label: 'Tickets', width: '20%', align: 'center' as const },
-  { key: 'priority', label: 'Priority', width: '20%', align: 'center' as const },
-  { key: 'status', label: 'Status', width: '20%', align: 'center' as const },
-];
+import { N8nConfigModal } from './N8nConfigModal';
+import { useDashboardData } from '@/hooks/useDashboardData';
+import { Button } from '@/components/ui/button';
+import { Settings } from 'lucide-react';
+import { useToast } from '@/components/ui/use-toast';
 
 // Define initial widget layouts
 const initialWidgets = [
@@ -84,8 +56,47 @@ const calculatePush = (mover: any, target: any) => {
   return { x: target.x, y: target.y - mover.height };
 };
 
+// Local storage key for the n8n webhook URL
+const N8N_URL_KEY = 'tech-dashboard-n8n-url';
+
 export const Dashboard: React.FC = () => {
   const [widgets, setWidgets] = useState(initialWidgets);
+  const [configModalOpen, setConfigModalOpen] = useState(false);
+  const [n8nUrl, setN8nUrl] = useState<string>(() => {
+    // Load from localStorage on initial render
+    if (typeof window !== 'undefined') {
+      return localStorage.getItem(N8N_URL_KEY) || '';
+    }
+    return '';
+  });
+  
+  const { data, isLoading, error, refreshData } = useDashboardData(n8nUrl);
+  const { toast } = useToast();
+
+  // Save n8n URL to localStorage when it changes
+  useEffect(() => {
+    if (n8nUrl) {
+      localStorage.setItem(N8N_URL_KEY, n8nUrl);
+    }
+  }, [n8nUrl]);
+
+  // Handle n8n config save
+  const handleSaveConfig = (url: string) => {
+    setN8nUrl(url);
+    toast({
+      title: "Configuration Saved",
+      description: "The n8n webhook URL has been saved.",
+    });
+  };
+
+  // Handle refresh button click
+  const handleRefresh = () => {
+    refreshData();
+    toast({
+      title: "Refreshing Data",
+      description: "Fetching latest data from n8n...",
+    });
+  };
 
   // Handle widget movement
   const handleWidgetMove = (id: string, x: number, y: number) => {
@@ -199,60 +210,72 @@ export const Dashboard: React.FC = () => {
   const renderWidgetContent = (id: string) => {
     switch(id) {
       case 'schedules':
-        return <MetricWidget value="4" label="MINS AGO" size="lg" variant="primary" />;
+        return <MetricWidget 
+                value={data.metrics.schedulesToday} 
+                label="MINS AGO" 
+                size="lg" 
+                variant="primary" 
+              />;
         
       case 'open-tickets':
-        return <MetricWidget value="3.69K" label="4 MINS AGO" size="lg" variant="primary" />;
+        return <MetricWidget 
+                value={data.metrics.openTickets.value} 
+                label="4 MINS AGO" 
+                change={data.metrics.openTickets.change}
+                size="lg" 
+                variant="primary" 
+              />;
         
       case 'stale-tickets':
         return <MetricWidget 
-                value="3.60K" 
+                value={data.metrics.staleTickets.value}
                 label="4 MINS AGO" 
-                change={{ value: -2.5, period: 'vs last week' }} 
+                change={data.metrics.staleTickets.change}
                 size="lg" 
                 variant="danger" 
               />;
         
       case 'overdue':
         return <MetricWidget 
-                value="471" 
+                value={data.metrics.overdue.value}
                 label="3 MINS AGO" 
-                change={{ value: 15.2, period: 'vs last month' }} 
+                change={data.metrics.overdue.change}
                 size="lg" 
                 variant="danger" 
               />;
         
       case 'tickets-by-company':
-        return <ChartWidget type="bar" data={sampleBarData} />;
+        return <ChartWidget type="bar" data={data.charts.ticketsByCompany} />;
         
       case 'worked-on-today':
-        return <ChartWidget type="donut" data={sampleChartData} />;
+        return <ChartWidget type="donut" data={data.charts.workedOnToday} />;
         
       case 'resolved-today':
         return <MetricWidget 
-                value="182" 
+                value={data.metrics.resolvedToday.value}
                 label="4 MINS AGO" 
-                change={{ value: 8.7, period: 'vs yesterday' }} 
+                change={data.metrics.resolvedToday.change}
                 size="lg" 
                 variant="secondary" 
               />;
         
       case 'open-tickets-critical':
-        return <ChartWidget 
-                type="bar" 
-                data={[
-                  { name: 'Urgent', value: 20 },
-                  { name: 'High', value: 15 },
-                  { name: 'Medium', value: 8 },
-                  { name: 'Low', value: 2 }
-                ]} 
-              />;
+        return <ChartWidget type="bar" data={data.charts.openTicketsCritical} />;
         
       case 'recent-tickets':
-        return <TableWidget columns={tableColumns} data={sampleTableData} maxRows={8} />;
+        return <TableWidget 
+                columns={[
+                  { key: 'company', label: 'Company', width: '40%' },
+                  { key: 'tickets', label: 'Tickets', width: '20%', align: 'center' as const },
+                  { key: 'priority', label: 'Priority', width: '20%', align: 'center' as const },
+                  { key: 'status', label: 'Status', width: '20%', align: 'center' as const },
+                ]} 
+                data={data.tables.recentTickets} 
+                maxRows={8} 
+              />;
         
       case 'priority-distribution':
-        return <ChartWidget type="pie" data={sampleChartData} />;
+        return <ChartWidget type="pie" data={data.charts.priorityDistribution} />;
         
       default:
         return <div>Widget content</div>;
@@ -261,12 +284,35 @@ export const Dashboard: React.FC = () => {
 
   return (
     <div className="min-h-screen bg-dashboard-grid p-6">
-      <div className="mb-6">
-        <h1 className="text-2xl font-bold text-foreground mb-2">Tech Dashboard</h1>
-        <p className="text-muted-foreground">Drag widgets to reposition • Other widgets move out of the way automatically • Resize by dragging the corner</p>
+      <div className="mb-6 flex justify-between items-center">
+        <div>
+          <h1 className="text-2xl font-bold text-foreground mb-2">Tech Dashboard</h1>
+          <p className="text-muted-foreground">
+            {n8nUrl ? 'Connected to n8n webhook' : 'Using sample data - Connect to n8n for live data'}
+          </p>
+        </div>
+        <div className="flex gap-2">
+          <Button variant="outline" size="sm" onClick={handleRefresh} disabled={isLoading || !n8nUrl}>
+            {isLoading ? 'Loading...' : 'Refresh Data'}
+          </Button>
+          <Button 
+            variant="outline" 
+            size="sm" 
+            onClick={() => setConfigModalOpen(true)}
+          >
+            <Settings className="h-4 w-4 mr-1" />
+            Configure n8n
+          </Button>
+        </div>
       </div>
 
-      <div className="relative w-full h-[calc(100vh-100px)] overflow-hidden">
+      {error && (
+        <div className="bg-red-50 text-red-700 dark:bg-red-900 dark:text-red-300 p-3 rounded-md mb-4">
+          Error loading data: {error}
+        </div>
+      )}
+
+      <div className="relative w-full h-[calc(100vh-140px)] overflow-hidden">
         {widgets.map(widget => (
           <ResizableWidget
             key={widget.id}
@@ -279,10 +325,23 @@ export const Dashboard: React.FC = () => {
             onMove={handleWidgetMove}
             onResize={handleWidgetResize}
           >
-            {renderWidgetContent(widget.id)}
+            {isLoading ? (
+              <div className="h-full w-full flex items-center justify-center">
+                <div className="animate-spin h-6 w-6 border-2 border-current border-t-transparent rounded-full"></div>
+              </div>
+            ) : (
+              renderWidgetContent(widget.id)
+            )}
           </ResizableWidget>
         ))}
       </div>
+
+      <N8nConfigModal
+        open={configModalOpen}
+        onOpenChange={setConfigModalOpen}
+        onSave={handleSaveConfig}
+        currentUrl={n8nUrl}
+      />
     </div>
   );
 };
