@@ -503,7 +503,7 @@ export const Dashboard: React.FC = () => {
 
       {/* Last refresh time - only show if there's new data and n8n is connected */}
       {lastRefreshTime && n8nUrl && (
-        <div className="fixed bottom-2 left-1/2 transform -translate-x-1/2 text-xs text-muted-foreground">
+        <div className="fixed bottom-2 left-1/2 transform -translate-x-1/2 text-[10px] text-muted-foreground/50">
           Last updated: {lastRefreshTime.toLocaleString()}
         </div>
       )}
