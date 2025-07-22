@@ -61,6 +61,29 @@ export default {
 					'accent-foreground': 'hsl(var(--sidebar-accent-foreground))',
 					border: 'hsl(var(--sidebar-border))',
 					ring: 'hsl(var(--sidebar-ring))'
+				},
+				dashboard: {
+					grid: 'hsl(var(--dashboard-grid-bg))',
+				},
+				widget: {
+					DEFAULT: 'hsl(var(--widget-bg))',
+					border: 'hsl(var(--widget-border))',
+					shadow: 'hsl(var(--widget-shadow))'
+				},
+				metric: {
+					primary: 'hsl(var(--metric-primary))',
+					secondary: 'hsl(var(--metric-secondary))',
+					warning: 'hsl(var(--metric-warning))',
+					danger: 'hsl(var(--metric-danger))'
+				},
+				chart: {
+					blue: 'hsl(var(--chart-blue))',
+					red: 'hsl(var(--chart-red))',
+					gray: 'hsl(var(--chart-gray))'
+				},
+				resize: {
+					handle: 'hsl(var(--resize-handle))',
+					active: 'hsl(var(--resize-handle-active))'
 				}
 			},
 			borderRadius: {
