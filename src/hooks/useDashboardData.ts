@@ -132,23 +132,30 @@ function mapN8nData(n8nData: any): DashboardData {
       return defaultData;
     }
     
-    // Example mapping - adjust according to your n8n data structure
-    if (n8nData.metrics) {
+    // Handle array response from n8n (extract first item)
+    let dataToMap = n8nData;
+    if (Array.isArray(n8nData) && n8nData.length > 0) {
+      dataToMap = n8nData[0];
+      console.log("Extracted data from array:", dataToMap);
+    }
+    
+    // Map the data according to n8n structure
+    if (dataToMap.metrics) {
       mappedData.metrics = {
         ...mappedData.metrics,
-        ...n8nData.metrics
+        ...dataToMap.metrics
       };
     }
 
-    if (n8nData.charts) {
+    if (dataToMap.charts) {
       mappedData.charts = {
         ...mappedData.charts,
-        ...n8nData.charts
+        ...dataToMap.charts
       };
     }
 
-    if (n8nData.tables?.recentTickets) {
-      mappedData.tables.recentTickets = n8nData.tables.recentTickets;
+    if (dataToMap.tables?.recentTickets) {
+      mappedData.tables.recentTickets = dataToMap.tables.recentTickets;
     }
     
     console.log("Mapped dashboard data:", mappedData);
