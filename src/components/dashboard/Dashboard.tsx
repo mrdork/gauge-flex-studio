@@ -6,7 +6,7 @@ import { TableWidget } from './TableWidget';
 import { N8nConfigModal } from './N8nConfigModal';
 import { useDashboardData } from '@/hooks/useDashboardData';
 import { Button } from '@/components/ui/button';
-import { Settings } from 'lucide-react';
+import { Settings, RotateCcw } from 'lucide-react';
 import { useToast } from '@/components/ui/use-toast';
 
 // Define initial widget layouts - ensuring no overlaps
@@ -115,6 +115,43 @@ export const Dashboard: React.FC = () => {
     toast({
       title: "Refreshing Data",
       description: "Fetching latest data from n8n...",
+    });
+  };
+
+  // Reset widgets to fit on screen optimally
+  const handleResetLayout = () => {
+    const containerWidth = window.innerWidth - 60; // Account for padding
+    const containerHeight = window.innerHeight - 200; // Account for header and padding
+    
+    // Calculate optimal grid layout
+    const cols = 4;
+    const rows = Math.ceil(widgets.length / cols);
+    
+    const cellWidth = Math.floor((containerWidth - (cols - 1) * 20) / cols); // 20px gap between widgets
+    const cellHeight = Math.floor((containerHeight - (rows - 1) * 20) / rows);
+    
+    // Snap to grid
+    const snappedCellWidth = snapToGrid(Math.max(200, cellWidth));
+    const snappedCellHeight = snapToGrid(Math.max(150, cellHeight));
+    
+    const resetWidgets = widgets.map((widget, index) => {
+      const row = Math.floor(index / cols);
+      const col = index % cols;
+      
+      return {
+        ...widget,
+        x: snapToGrid(20 + col * (snappedCellWidth + 20)),
+        y: snapToGrid(20 + row * (snappedCellHeight + 20)),
+        width: snappedCellWidth,
+        height: snappedCellHeight
+      };
+    });
+    
+    setWidgets(resetWidgets);
+    
+    toast({
+      title: "Layout Reset",
+      description: "All widgets have been resized and repositioned to fit the screen.",
     });
   };
 
@@ -312,6 +349,10 @@ export const Dashboard: React.FC = () => {
           </p>
         </div>
         <div className="flex gap-2">
+          <Button variant="outline" size="sm" onClick={handleResetLayout}>
+            <RotateCcw className="h-4 w-4 mr-1" />
+            Reset Layout
+          </Button>
           <Button variant="outline" size="sm" onClick={handleRefresh} disabled={isLoading || !n8nUrl}>
             {isLoading ? 'Loading...' : 'Refresh Data'}
           </Button>
