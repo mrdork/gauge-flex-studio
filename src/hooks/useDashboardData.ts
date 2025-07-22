@@ -112,10 +112,17 @@ export function useDashboardData(n8nWebhookUrl?: string) {
   useEffect(() => {
     if (n8nWebhookUrl) {
       fetchData();
+      
+      // Set up auto-refresh every 30 seconds (optional)
+      const interval = setInterval(() => {
+        fetchData();
+      }, 30000);
+      
+      return () => clearInterval(interval);
     }
   }, [n8nWebhookUrl]);
 
-  return { data, isLoading, error, refreshData: fetchData };
+  return { data, setData, isLoading, error, refreshData: fetchData };
 }
 
 // Helper function to map n8n data to dashboard format
