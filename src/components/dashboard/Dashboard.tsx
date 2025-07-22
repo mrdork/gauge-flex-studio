@@ -413,27 +413,29 @@ export const Dashboard: React.FC = () => {
             {n8nUrl ? 'Connected to n8n webhook' : 'Using sample data - Connect to n8n for live data'}
           </p>
         </div>
-        <div className="flex gap-2">
-          <Button variant="outline" size="sm" onClick={handleFullscreenToggle}>
-            {isFullscreen ? <Minimize className="h-4 w-4 mr-1" /> : <Maximize className="h-4 w-4 mr-1" />}
-            {isFullscreen ? 'Exit Fullscreen' : 'Fullscreen'}
-          </Button>
-          <Button variant="outline" size="sm" onClick={handleResetLayout}>
-            <RotateCcw className="h-4 w-4 mr-1" />
-            Reset Layout
-          </Button>
-          <Button variant="outline" size="sm" onClick={handleRefresh} disabled={isLoading || !n8nUrl}>
-            {isLoading ? 'Loading...' : 'Refresh Data'}
-          </Button>
-          <Button 
-            variant="outline" 
-            size="sm" 
-            onClick={() => setConfigModalOpen(true)}
-          >
-            <Settings className="h-4 w-4 mr-1" />
-            Configure n8n
-          </Button>
-        </div>
+        {!isFullscreen && (
+          <div className="flex gap-2">
+            <Button variant="outline" size="sm" onClick={handleFullscreenToggle}>
+              <Maximize className="h-4 w-4 mr-1" />
+              Fullscreen
+            </Button>
+            <Button variant="outline" size="sm" onClick={handleResetLayout}>
+              <RotateCcw className="h-4 w-4 mr-1" />
+              Reset Layout
+            </Button>
+            <Button variant="outline" size="sm" onClick={handleRefresh} disabled={isLoading || !n8nUrl}>
+              {isLoading ? 'Loading...' : 'Refresh Data'}
+            </Button>
+            <Button 
+              variant="outline" 
+              size="sm" 
+              onClick={() => setConfigModalOpen(true)}
+            >
+              <Settings className="h-4 w-4 mr-1" />
+              Configure n8n
+            </Button>
+          </div>
+        )}
       </div>
 
       {error && (
