@@ -9,7 +9,7 @@ import { Button } from '@/components/ui/button';
 import { Settings } from 'lucide-react';
 import { useToast } from '@/components/ui/use-toast';
 
-// Define initial widget layouts
+// Define initial widget layouts - ensuring no overlaps
 const initialWidgets = [
   { id: 'schedules', title: 'Schedules Today', x: 20, y: 20, width: 250, height: 200 },
   { id: 'open-tickets', title: 'Open Tickets', x: 290, y: 20, width: 250, height: 200 },
@@ -20,7 +20,7 @@ const initialWidgets = [
   { id: 'resolved-today', title: 'Resolved Today', x: 760, y: 240, width: 250, height: 200 },
   { id: 'open-tickets-critical', title: 'Open Tickets - Critical', x: 20, y: 560, width: 400, height: 320 },
   { id: 'recent-tickets', title: 'Recent Tickets', x: 440, y: 560, width: 500, height: 350 },
-  { id: 'priority-distribution', title: 'Priority Distribution', x: 760, y: 460, width: 350, height: 300 },
+  { id: 'priority-distribution', title: 'Priority Distribution', x: 1030, y: 240, width: 350, height: 300 },
 ];
 
 // Grid size for snapping
