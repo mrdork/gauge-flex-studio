@@ -30,7 +30,7 @@ export const ResizableWidget: React.FC<ResizableWidgetProps> = ({
   className
 }) => {
   const widgetId = useRef(`widget-${Math.random().toString(36).substr(2, 9)}`).current;
-  const { registerWidget, updateWidget, removeWidget, checkCollision, getSnappedPosition, pushWidgets, preventOverlap } = useGridLayout();
+  const { registerWidget, updateWidget, removeWidget, getSnappedPosition, preventOverlap } = useGridLayout();
   
   const [position, setPosition] = useState({ x: initialX, y: initialY, width: initialWidth, height: initialHeight });
   const [isResizing, setIsResizing] = useState(false);
@@ -78,11 +78,15 @@ export const ResizableWidget: React.FC<ResizableWidgetProps> = ({
 
       // Prevent overlapping with other widgets
       const nonOverlappingPosition = preventOverlap(widgetId, { x: newX, y: newY });
-      if (nonOverlappingPosition.x !== undefined) newX = nonOverlappingPosition.x;
-      if (nonOverlappingPosition.y !== undefined) newY = nonOverlappingPosition.y;
-      
-      // Update position
-      setPosition(prev => ({ ...prev, x: newX, y: newY }));
+
+      // Only update if we got a valid non-overlapping position
+      if (nonOverlappingPosition && nonOverlappingPosition.x !== undefined && nonOverlappingPosition.y !== undefined) {
+        setPosition(prev => ({ 
+          ...prev, 
+          x: nonOverlappingPosition.x!, 
+          y: nonOverlappingPosition.y! 
+        }));
+      }
     };
 
     const handleDragUp = () => {
@@ -124,11 +128,15 @@ export const ResizableWidget: React.FC<ResizableWidgetProps> = ({
 
       // Prevent overlapping with other widgets
       const nonOverlappingPosition = preventOverlap(widgetId, { width: newWidth, height: newHeight });
-      if (nonOverlappingPosition.width !== undefined) newWidth = nonOverlappingPosition.width;
-      if (nonOverlappingPosition.height !== undefined) newHeight = nonOverlappingPosition.height;
-      
-      // Update size
-      setPosition(prev => ({ ...prev, width: newWidth, height: newHeight }));
+
+      // Only update if we got a valid non-overlapping position
+      if (nonOverlappingPosition && nonOverlappingPosition.width !== undefined && nonOverlappingPosition.height !== undefined) {
+        setPosition(prev => ({
+          ...prev,
+          width: nonOverlappingPosition.width!,
+          height: nonOverlappingPosition.height!
+        }));
+      }
     };
 
     const handleResizeUp = () => {

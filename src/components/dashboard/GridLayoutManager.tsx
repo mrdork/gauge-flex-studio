@@ -14,9 +14,8 @@ interface GridLayoutContextType {
   updateWidget: (id: string, position: Partial<WidgetPosition>) => void;
   removeWidget: (id: string) => void;
   checkCollision: (id: string, newPosition: Partial<WidgetPosition>) => WidgetPosition[] | null;
-  preventOverlap: (id: string, proposedPosition: Partial<WidgetPosition>) => Partial<WidgetPosition>;
+  preventOverlap: (id: string, proposedPosition: Partial<WidgetPosition>) => Partial<WidgetPosition> | null;
   getSnappedPosition: (id: string, position: Partial<WidgetPosition>) => Partial<WidgetPosition>;
-  pushWidgets: (movingWidgetId: string, newPosition: WidgetPosition) => void;
   gridSize: number;
 }
 
@@ -102,51 +101,33 @@ export const GridLayoutProvider: React.FC<GridLayoutProviderProps> = ({
     return collidingWidgets.length > 0 ? collidingWidgets : null;
   }, []);
 
-  const preventOverlap = useCallback((id: string, proposedPosition: Partial<WidgetPosition>): Partial<WidgetPosition> => {
+  const preventOverlap = useCallback((id: string, proposedPosition: Partial<WidgetPosition>): Partial<WidgetPosition> | null => {
     const current = widgetsRef.current.get(id);
-    if (!current) return proposedPosition;
+    if (!current) return null;
 
     const proposed = { ...current, ...proposedPosition };
     let adjustedPosition = { ...proposedPosition };
-    let needsAdjustment = false;
+    let hasCollision = false;
 
     // Check for collisions with other widgets
     for (const [widgetId, widget] of widgetsRef.current) {
       if (widgetId === id) continue;
 
-      const hasCollision = !(
+      const collision = !(
         proposed.x >= widget.x + widget.width ||
         proposed.x + proposed.width <= widget.x ||
         proposed.y >= widget.y + widget.height ||
         proposed.y + proposed.height <= widget.y
       );
 
-      if (hasCollision) {
-        needsAdjustment = true;
-        
-        // Calculate the minimum adjustments needed in each direction
-        const adjustRight = widget.x + widget.width - proposed.x;
-        const adjustLeft = proposed.x + proposed.width - widget.x;
-        const adjustDown = widget.y + widget.height - proposed.y;
-        const adjustUp = proposed.y + proposed.height - widget.y;
-        
-        // Find the smallest adjustment needed
-        const minAdjustment = Math.min(adjustRight, adjustLeft, adjustDown, adjustUp);
-        
-        // Apply the minimum adjustment to prevent overlap
-        if (minAdjustment === adjustRight && 'x' in adjustedPosition) {
-          adjustedPosition.x = widget.x + widget.width + 1; // Push right
-        } else if (minAdjustment === adjustLeft && 'x' in adjustedPosition) {
-          adjustedPosition.x = widget.x - proposed.width - 1; // Push left
-        } else if (minAdjustment === adjustDown && 'y' in adjustedPosition) {
-          adjustedPosition.y = widget.y + widget.height + 1; // Push down
-        } else if (minAdjustment === adjustUp && 'y' in adjustedPosition) {
-          adjustedPosition.y = widget.y - proposed.height - 1; // Push up
-        }
+      if (collision) {
+        hasCollision = true;
+        break;
       }
     }
 
-    return needsAdjustment ? adjustedPosition : proposedPosition;
+    // If there's a collision, return null to prevent the move
+    return hasCollision ? null : adjustedPosition;
   }, []);
 
   const snapToGrid = useCallback((value: number): number => {
@@ -204,99 +185,6 @@ export const GridLayoutProvider: React.FC<GridLayoutProviderProps> = ({
     };
   }, [snapThreshold, snapToGrid]);
 
-  const pushWidgets = useCallback((movingWidgetId: string, newPosition: WidgetPosition) => {
-    const collisions = checkCollision(movingWidgetId, newPosition);
-    if (!collisions) return;
-
-    // Map to track widgets that have been moved in this operation to avoid infinite loops
-    const movedWidgets = new Set([movingWidgetId]);
-    
-    // Queue to handle cascading pushes
-    const pushQueue: { id: string, position: WidgetPosition }[] = 
-      collisions.map(widget => ({ id: widget.id, position: { ...widget } }));
-    
-    // Process queue in a breadth-first manner
-    while (pushQueue.length > 0) {
-      const current = pushQueue.shift();
-      if (!current || movedWidgets.has(current.id)) continue;
-      
-      const movingWidget = widgetsRef.current.get(movingWidgetId);
-      const targetWidget = widgetsRef.current.get(current.id);
-      
-      if (!movingWidget || !targetWidget) continue;
-      
-      // Mark as moved to prevent revisiting
-      movedWidgets.add(current.id);
-      
-      // Determine direction to push (horizontal or vertical)
-      const overlapX = Math.min(
-        movingWidget.x + movingWidget.width - targetWidget.x,
-        targetWidget.x + targetWidget.width - movingWidget.x
-      );
-      
-      const overlapY = Math.min(
-        movingWidget.y + movingWidget.height - targetWidget.y,
-        targetWidget.y + targetWidget.height - movingWidget.y
-      );
-      
-      // Push in the direction of least overlap
-      let newWidgetPosition: WidgetPosition;
-      
-      if (overlapX < overlapY) {
-        // Push horizontally
-        if (movingWidget.x < targetWidget.x) {
-          // Push right
-          newWidgetPosition = {
-            ...targetWidget,
-            x: movingWidget.x + movingWidget.width + 10 // Add a gap
-          };
-        } else {
-          // Push left
-          newWidgetPosition = {
-            ...targetWidget,
-            x: movingWidget.x - targetWidget.width - 10 // Add a gap
-          };
-        }
-      } else {
-        // Push vertically
-        if (movingWidget.y < targetWidget.y) {
-          // Push down
-          newWidgetPosition = {
-            ...targetWidget,
-            y: movingWidget.y + movingWidget.height + 10 // Add a gap
-          };
-        } else {
-          // Push up
-          newWidgetPosition = {
-            ...targetWidget,
-            y: movingWidget.y - targetWidget.height - 10 // Add a gap
-          };
-        }
-      }
-      
-      // Ensure widget stays in view (non-negative coordinates)
-      newWidgetPosition.x = Math.max(0, newWidgetPosition.x);
-      newWidgetPosition.y = Math.max(0, newWidgetPosition.y);
-      
-      // Apply the snapped position
-      const snapped = getSnappedPosition(current.id, newWidgetPosition);
-      newWidgetPosition = { ...newWidgetPosition, ...snapped };
-      
-      // Update the widget position
-      updateWidget(current.id, newWidgetPosition);
-      
-      // Check if this widget now collides with others
-      const subsequentCollisions = checkCollision(current.id, newWidgetPosition);
-      if (subsequentCollisions) {
-        subsequentCollisions.forEach(widget => {
-          if (!movedWidgets.has(widget.id)) {
-            pushQueue.push({ id: widget.id, position: { ...widget } });
-          }
-        });
-      }
-    }
-  }, [checkCollision, getSnappedPosition, updateWidget]);
-
   const value = {
     widgets,
     registerWidget,
@@ -305,7 +193,6 @@ export const GridLayoutProvider: React.FC<GridLayoutProviderProps> = ({
     checkCollision,
     preventOverlap,
     getSnappedPosition,
-    pushWidgets,
     gridSize
   };
 
