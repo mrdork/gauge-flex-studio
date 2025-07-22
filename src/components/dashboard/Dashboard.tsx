@@ -60,7 +60,27 @@ const calculatePush = (mover: any, target: any) => {
 const N8N_URL_KEY = 'tech-dashboard-n8n-url';
 
 export const Dashboard: React.FC = () => {
-  const [widgets, setWidgets] = useState(initialWidgets);
+  // Check for initial overlaps and fix them
+  const fixInitialOverlaps = (widgets: any[]) => {
+    const fixed = [...widgets];
+    
+    for (let i = 0; i < fixed.length; i++) {
+      for (let j = i + 1; j < fixed.length; j++) {
+        if (checkOverlap(fixed[i], fixed[j])) {
+          console.log(`Initial overlap detected between ${fixed[i].id} and ${fixed[j].id}`);
+          // Move the second widget to the right
+          fixed[j] = {
+            ...fixed[j],
+            x: fixed[i].x + fixed[i].width + 20
+          };
+        }
+      }
+    }
+    
+    return fixed;
+  };
+
+  const [widgets, setWidgets] = useState(() => fixInitialOverlaps(initialWidgets));
   const [configModalOpen, setConfigModalOpen] = useState(false);
   const [n8nUrl, setN8nUrl] = useState<string>(() => {
     // Load from localStorage on initial render
