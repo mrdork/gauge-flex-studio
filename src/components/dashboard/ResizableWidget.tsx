@@ -1,6 +1,5 @@
-import React, { useState, useRef, useCallback, useEffect } from 'react';
+import React, { useState, useRef, useEffect } from 'react';
 import { cn } from '@/lib/utils';
-import { useGridLayout, WidgetPosition } from './GridLayoutManager';
 
 interface ResizableWidgetProps {
   children: React.ReactNode;
@@ -14,6 +13,9 @@ interface ResizableWidgetProps {
   maxWidth?: number;
   maxHeight?: number;
   className?: string;
+  id: string;
+  onMove: (id: string, x: number, y: number) => void;
+  onResize: (id: string, width: number, height: number) => void;
 }
 
 export const ResizableWidget: React.FC<ResizableWidgetProps> = ({
@@ -27,11 +29,11 @@ export const ResizableWidget: React.FC<ResizableWidgetProps> = ({
   minHeight = 150,
   maxWidth = 1200,
   maxHeight = 800,
-  className
+  className,
+  id,
+  onMove,
+  onResize
 }) => {
-  const widgetId = useRef(`widget-${Math.random().toString(36).substr(2, 9)}`).current;
-  const { registerWidget, updateWidget, removeWidget, moveWidget, resizeWidget } = useGridLayout();
-  
   const [position, setPosition] = useState({ x: initialX, y: initialY, width: initialWidth, height: initialHeight });
   const [isResizing, setIsResizing] = useState(false);
   const [isDragging, setIsDragging] = useState(false);
@@ -39,26 +41,25 @@ export const ResizableWidget: React.FC<ResizableWidgetProps> = ({
   const dragRef = useRef<{ startX: number; startY: number; startMouseX: number; startMouseY: number } | null>(null);
   const resizeRef = useRef<{ startX: number; startY: number; startWidth: number; startHeight: number } | null>(null);
 
-  // Register widget with grid layout
+  // Update local position when external position changes
   useEffect(() => {
-    registerWidget(widgetId, { ...position, id: widgetId });
-    return () => removeWidget(widgetId);
-  }, []);
-
-  // Update local state when widget position changes in the grid
+    setPosition(prev => ({
+      ...prev,
+      x: initialX,
+      y: initialY
+    }));
+  }, [initialX, initialY]);
+  
+  // Update local size when external size changes
   useEffect(() => {
-    const handleWidgetUpdate = (e: CustomEvent) => {
-      const { id, ...updatedPosition } = e.detail as WidgetPosition;
-      if (id === widgetId) {
-        setPosition(prev => ({ ...prev, ...updatedPosition }));
-      }
-    };
+    setPosition(prev => ({
+      ...prev,
+      width: initialWidth,
+      height: initialHeight
+    }));
+  }, [initialWidth, initialHeight]);
 
-    window.addEventListener('widget-update' as any, handleWidgetUpdate);
-    return () => window.removeEventListener('widget-update' as any, handleWidgetUpdate);
-  }, [widgetId]);
-
-  const handleDragMouseDown = useCallback((e: React.MouseEvent) => {
+  const handleDragMouseDown = (e: React.MouseEvent) => {
     if (e.target !== e.currentTarget) return; // Only drag from header
     e.preventDefault();
     setIsDragging(true);
@@ -87,13 +88,8 @@ export const ResizableWidget: React.FC<ResizableWidgetProps> = ({
       setIsDragging(false);
       
       if (dragRef.current) {
-        const deltaX = position.x - dragRef.current.startX;
-        const deltaY = position.y - dragRef.current.startY;
-        
-        // If there was actual movement, apply the final position with collision handling
-        if (Math.abs(deltaX) > 5 || Math.abs(deltaY) > 5) {
-          moveWidget(widgetId, position.x, position.y);
-        }
+        // Notify parent of the move
+        onMove(id, position.x, position.y);
       }
       
       dragRef.current = null;
@@ -103,9 +99,9 @@ export const ResizableWidget: React.FC<ResizableWidgetProps> = ({
 
     document.addEventListener('mousemove', handleDragMove);
     document.addEventListener('mouseup', handleDragUp);
-  }, [position, widgetId, moveWidget]);
+  };
 
-  const handleResizeMouseDown = useCallback((e: React.MouseEvent) => {
+  const handleResizeMouseDown = (e: React.MouseEvent) => {
     e.preventDefault();
     e.stopPropagation();
     setIsResizing(true);
@@ -134,13 +130,8 @@ export const ResizableWidget: React.FC<ResizableWidgetProps> = ({
       setIsResizing(false);
       
       if (resizeRef.current) {
-        const deltaWidth = position.width - resizeRef.current.startWidth;
-        const deltaHeight = position.height - resizeRef.current.startHeight;
-        
-        // If there was actual resizing, apply the final size with collision handling
-        if (Math.abs(deltaWidth) > 5 || Math.abs(deltaHeight) > 5) {
-          resizeWidget(widgetId, position.width, position.height);
-        }
+        // Notify parent of the resize
+        onResize(id, position.width, position.height);
       }
       
       resizeRef.current = null;
@@ -150,7 +141,7 @@ export const ResizableWidget: React.FC<ResizableWidgetProps> = ({
 
     document.addEventListener('mousemove', handleResizeMove);
     document.addEventListener('mouseup', handleResizeUp);
-  }, [position, minWidth, minHeight, maxWidth, maxHeight, widgetId, resizeWidget]);
+  };
 
   return (
     <div
