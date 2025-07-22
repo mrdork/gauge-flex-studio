@@ -1,6 +1,6 @@
 import React, { useState, useRef, useCallback, useEffect } from 'react';
 import { cn } from '@/lib/utils';
-import { useGridLayout } from './GridLayoutManager';
+import { useGridLayout, WidgetPosition } from './GridLayoutManager';
 
 interface ResizableWidgetProps {
   children: React.ReactNode;
@@ -30,7 +30,7 @@ export const ResizableWidget: React.FC<ResizableWidgetProps> = ({
   className
 }) => {
   const widgetId = useRef(`widget-${Math.random().toString(36).substr(2, 9)}`).current;
-  const { registerWidget, updateWidget, removeWidget, getSnappedPosition, checkCollision, pushWidgets } = useGridLayout();
+  const { registerWidget, updateWidget, removeWidget, moveWidget, resizeWidget } = useGridLayout();
   
   const [position, setPosition] = useState({ x: initialX, y: initialY, width: initialWidth, height: initialHeight });
   const [isResizing, setIsResizing] = useState(false);
@@ -45,10 +45,18 @@ export const ResizableWidget: React.FC<ResizableWidgetProps> = ({
     return () => removeWidget(widgetId);
   }, []);
 
-  // Update grid layout when position changes
+  // Update local state when widget position changes in the grid
   useEffect(() => {
-    updateWidget(widgetId, position);
-  }, [position]);
+    const handleWidgetUpdate = (e: CustomEvent) => {
+      const { id, ...updatedPosition } = e.detail as WidgetPosition;
+      if (id === widgetId) {
+        setPosition(prev => ({ ...prev, ...updatedPosition }));
+      }
+    };
+
+    window.addEventListener('widget-update' as any, handleWidgetUpdate);
+    return () => window.removeEventListener('widget-update' as any, handleWidgetUpdate);
+  }, [widgetId]);
 
   const handleDragMouseDown = useCallback((e: React.MouseEvent) => {
     if (e.target !== e.currentTarget) return; // Only drag from header
@@ -68,28 +76,26 @@ export const ResizableWidget: React.FC<ResizableWidgetProps> = ({
       const deltaX = moveEvent.clientX - dragRef.current.startMouseX;
       const deltaY = moveEvent.clientY - dragRef.current.startMouseY;
 
-      let newX = Math.max(0, dragRef.current.startX + deltaX);
-      let newY = Math.max(0, dragRef.current.startY + deltaY);
+      const newX = Math.max(0, dragRef.current.startX + deltaX);
+      const newY = Math.max(0, dragRef.current.startY + deltaY);
 
-      // Get snapped position
-      const snapped = getSnappedPosition(widgetId, { x: newX, y: newY });
-      if (snapped.x !== undefined) newX = snapped.x;
-      if (snapped.y !== undefined) newY = snapped.y;
-
-      // Update position (always update - dragging is always allowed)
-      const newPosition = { ...position, x: newX, y: newY };
-      setPosition(newPosition);
-      
-      // Check for collision and push other widgets if needed
-      const collidingWidgets = checkCollision(widgetId, { x: newX, y: newY });
-      if (collidingWidgets) {
-        // Push colliding widgets out of the way
-        pushWidgets(widgetId, { ...newPosition, id: widgetId });
-      }
+      // Update local position for smooth dragging
+      setPosition(prev => ({ ...prev, x: newX, y: newY }));
     };
 
     const handleDragUp = () => {
       setIsDragging(false);
+      
+      if (dragRef.current) {
+        const deltaX = position.x - dragRef.current.startX;
+        const deltaY = position.y - dragRef.current.startY;
+        
+        // If there was actual movement, apply the final position with collision handling
+        if (Math.abs(deltaX) > 5 || Math.abs(deltaY) > 5) {
+          moveWidget(widgetId, position.x, position.y);
+        }
+      }
+      
       dragRef.current = null;
       document.removeEventListener('mousemove', handleDragMove);
       document.removeEventListener('mouseup', handleDragUp);
@@ -97,7 +103,7 @@ export const ResizableWidget: React.FC<ResizableWidgetProps> = ({
 
     document.addEventListener('mousemove', handleDragMove);
     document.addEventListener('mouseup', handleDragUp);
-  }, [position, widgetId, getSnappedPosition, checkCollision, pushWidgets]);
+  }, [position, widgetId, moveWidget]);
 
   const handleResizeMouseDown = useCallback((e: React.MouseEvent) => {
     e.preventDefault();
@@ -117,28 +123,26 @@ export const ResizableWidget: React.FC<ResizableWidgetProps> = ({
       const deltaX = moveEvent.clientX - resizeRef.current.startX;
       const deltaY = moveEvent.clientY - resizeRef.current.startY;
 
-      let newWidth = Math.max(minWidth, Math.min(maxWidth, resizeRef.current.startWidth + deltaX));
-      let newHeight = Math.max(minHeight, Math.min(maxHeight, resizeRef.current.startHeight + deltaY));
+      const newWidth = Math.max(minWidth, Math.min(maxWidth, resizeRef.current.startWidth + deltaX));
+      const newHeight = Math.max(minHeight, Math.min(maxHeight, resizeRef.current.startHeight + deltaY));
 
-      // Get snapped size
-      const snapped = getSnappedPosition(widgetId, { width: newWidth, height: newHeight });
-      if (snapped.width !== undefined) newWidth = snapped.width;
-      if (snapped.height !== undefined) newHeight = snapped.height;
-
-      // Update size (always update - resizing is always allowed)
-      const newPosition = { ...position, width: newWidth, height: newHeight };
-      setPosition(newPosition);
-      
-      // Check for collision and push other widgets if needed
-      const collidingWidgets = checkCollision(widgetId, { width: newWidth, height: newHeight });
-      if (collidingWidgets) {
-        // Push colliding widgets out of the way
-        pushWidgets(widgetId, { ...newPosition, id: widgetId });
-      }
+      // Update local size for smooth resizing
+      setPosition(prev => ({ ...prev, width: newWidth, height: newHeight }));
     };
 
     const handleResizeUp = () => {
       setIsResizing(false);
+      
+      if (resizeRef.current) {
+        const deltaWidth = position.width - resizeRef.current.startWidth;
+        const deltaHeight = position.height - resizeRef.current.startHeight;
+        
+        // If there was actual resizing, apply the final size with collision handling
+        if (Math.abs(deltaWidth) > 5 || Math.abs(deltaHeight) > 5) {
+          resizeWidget(widgetId, position.width, position.height);
+        }
+      }
+      
       resizeRef.current = null;
       document.removeEventListener('mousemove', handleResizeMove);
       document.removeEventListener('mouseup', handleResizeUp);
@@ -146,16 +150,16 @@ export const ResizableWidget: React.FC<ResizableWidgetProps> = ({
 
     document.addEventListener('mousemove', handleResizeMove);
     document.addEventListener('mouseup', handleResizeUp);
-  }, [position, minWidth, minHeight, maxWidth, maxHeight, widgetId, getSnappedPosition, checkCollision, pushWidgets]);
+  }, [position, minWidth, minHeight, maxWidth, maxHeight, widgetId, resizeWidget]);
 
   return (
     <div
       ref={widgetRef}
       className={cn(
         'absolute bg-widget border border-widget-border rounded-lg shadow-sm overflow-hidden',
-        'transition-all duration-200',
+        'transition-all duration-100',
         (isResizing || isDragging) && 'shadow-lg ring-2 ring-resize-active border-resize-active z-50',
-        isDragging && 'cursor-move',
+        isDragging && 'cursor-move opacity-90',
         className
       )}
       style={{ 

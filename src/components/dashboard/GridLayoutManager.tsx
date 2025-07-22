@@ -1,4 +1,4 @@
-import React, { createContext, useContext, useCallback, useState, useRef } from 'react';
+import React, { createContext, useContext, useCallback, useState, useRef, useEffect } from 'react';
 
 export interface WidgetPosition {
   id: string;
@@ -13,10 +13,10 @@ interface GridLayoutContextType {
   registerWidget: (id: string, position: WidgetPosition) => void;
   updateWidget: (id: string, position: Partial<WidgetPosition>) => void;
   removeWidget: (id: string) => void;
-  checkCollision: (id: string, newPosition: Partial<WidgetPosition>) => WidgetPosition[] | null;
-  preventOverlap: (id: string, proposedPosition: Partial<WidgetPosition>) => Partial<WidgetPosition> | null;
-  getSnappedPosition: (id: string, position: Partial<WidgetPosition>) => Partial<WidgetPosition>;
-  pushWidgets: (movingWidgetId: string, proposedPosition: WidgetPosition) => void;
+  moveWidget: (id: string, newX: number, newY: number) => void;
+  resizeWidget: (id: string, newWidth: number, newHeight: number) => void;
+  getSnappedPosition: (x: number, y: number) => { x: number, y: number };
+  getSnappedSize: (width: number, height: number) => { width: number, height: number };
   gridSize: number;
 }
 
@@ -45,7 +45,7 @@ export const GridLayoutProvider: React.FC<GridLayoutProviderProps> = ({
   const widgetsRef = useRef<Map<string, WidgetPosition>>(new Map());
 
   // Keep ref in sync with state
-  React.useEffect(() => {
+  useEffect(() => {
     widgetsRef.current = widgets;
   }, [widgets]);
 
@@ -62,7 +62,13 @@ export const GridLayoutProvider: React.FC<GridLayoutProviderProps> = ({
       const newWidgets = new Map(prev);
       const current = newWidgets.get(id);
       if (current) {
-        newWidgets.set(id, { ...current, ...newPosition });
+        const updatedWidget = { ...current, ...newPosition };
+        newWidgets.set(id, updatedWidget);
+        
+        // Dispatch event to notify the widget of position update
+        window.dispatchEvent(new CustomEvent('widget-update', {
+          detail: updatedWidget
+        }));
       }
       return newWidgets;
     });
@@ -75,213 +81,230 @@ export const GridLayoutProvider: React.FC<GridLayoutProviderProps> = ({
       return newWidgets;
     });
   }, []);
-  
-  const checkCollision = useCallback((id: string, newPosition: Partial<WidgetPosition>): WidgetPosition[] | null => {
-    const current = widgetsRef.current.get(id);
-    if (!current) return null;
 
-    const proposed = { ...current, ...newPosition };
-    const collidingWidgets: WidgetPosition[] = [];
-
-    // Check collision with all other widgets
-    for (const [widgetId, widget] of widgetsRef.current) {
-      if (widgetId === id) continue;
-
-      const hasCollision = !(
-        proposed.x >= widget.x + widget.width ||
-        proposed.x + proposed.width <= widget.x ||
-        proposed.y >= widget.y + widget.height ||
-        proposed.y + proposed.height <= widget.y
-      );
-
-      if (hasCollision) {
-        collidingWidgets.push(widget);
-      }
-    }
-
-    return collidingWidgets.length > 0 ? collidingWidgets : null;
-  }, []);
-
-  const preventOverlap = useCallback((id: string, proposedPosition: Partial<WidgetPosition>): Partial<WidgetPosition> | null => {
-    const current = widgetsRef.current.get(id);
-    if (!current) return null;
-
-    const proposed = { ...current, ...proposedPosition };
-    let adjustedPosition = { ...proposedPosition };
-    let hasCollision = false;
-
-    // Check for collisions with other widgets
-    for (const [widgetId, widget] of widgetsRef.current) {
-      if (widgetId === id) continue;
-
-      const collision = !(
-        proposed.x >= widget.x + widget.width ||
-        proposed.x + proposed.width <= widget.x ||
-        proposed.y >= widget.y + widget.height ||
-        proposed.y + proposed.height <= widget.y
-      );
-
-      if (collision) {
-        hasCollision = true;
-        break;
-      }
-    }
-
-    // If there's a collision, return null to prevent the move
-    return hasCollision ? null : adjustedPosition;
-  }, []);
-
-  const snapToGrid = useCallback((value: number): number => {
-    return Math.round(value / gridSize) * gridSize;
+  const getSnappedPosition = useCallback((x: number, y: number) => {
+    return {
+      x: Math.round(x / gridSize) * gridSize,
+      y: Math.round(y / gridSize) * gridSize
+    };
   }, [gridSize]);
 
-  const getSnappedPosition = useCallback((id: string, position: Partial<WidgetPosition>): Partial<WidgetPosition> => {
-    const current = widgetsRef.current.get(id);
-    if (!current) return position;
-
-    const proposed = { ...current, ...position };
-    let snappedX = proposed.x;
-    let snappedY = proposed.y;
-    let snappedWidth = proposed.width;
-    let snappedHeight = proposed.height;
-
-    // Snap to grid
-    snappedX = snapToGrid(snappedX);
-    snappedY = snapToGrid(snappedY);
-    snappedWidth = snapToGrid(snappedWidth);
-    snappedHeight = snapToGrid(snappedHeight);
-
-    // Snap to other widgets' edges
-    for (const [widgetId, widget] of widgetsRef.current) {
-      if (widgetId === id) continue;
-
-      // Horizontal snapping
-      const distanceToLeft = Math.abs(proposed.x - widget.x);
-      const distanceToRight = Math.abs(proposed.x - (widget.x + widget.width));
-      const distanceFromRightToLeft = Math.abs((proposed.x + proposed.width) - widget.x);
-      const distanceFromRightToRight = Math.abs((proposed.x + proposed.width) - (widget.x + widget.width));
-
-      if (distanceToLeft < snapThreshold) snappedX = widget.x;
-      if (distanceToRight < snapThreshold) snappedX = widget.x + widget.width;
-      if (distanceFromRightToLeft < snapThreshold) snappedX = widget.x - proposed.width;
-      if (distanceFromRightToRight < snapThreshold) snappedX = widget.x + widget.width - proposed.width;
-
-      // Vertical snapping
-      const distanceToTop = Math.abs(proposed.y - widget.y);
-      const distanceToBottom = Math.abs(proposed.y - (widget.y + widget.height));
-      const distanceFromBottomToTop = Math.abs((proposed.y + proposed.height) - widget.y);
-      const distanceFromBottomToBottom = Math.abs((proposed.y + proposed.height) - (widget.y + widget.height));
-
-      if (distanceToTop < snapThreshold) snappedY = widget.y;
-      if (distanceToBottom < snapThreshold) snappedY = widget.y + widget.height;
-      if (distanceFromBottomToTop < snapThreshold) snappedY = widget.y - proposed.height;
-      if (distanceFromBottomToBottom < snapThreshold) snappedY = widget.y + widget.height - proposed.height;
-    }
-
+  const getSnappedSize = useCallback((width: number, height: number) => {
     return {
-      x: snappedX,
-      y: snappedY,
-      width: snappedWidth,
-      height: snappedHeight
+      width: Math.round(width / gridSize) * gridSize,
+      height: Math.round(height / gridSize) * gridSize
     };
-  }, [snapThreshold, snapToGrid]);
+  }, [gridSize]);
 
-  // Push other widgets out of the way when a collision occurs
-  const pushWidgets = useCallback((movingWidgetId: string, proposedPosition: WidgetPosition) => {
-    // Keep track of widgets that have been moved
-    const movedWidgetIds = new Set<string>([movingWidgetId]);
+  const checkCollision = useCallback((widgetId: string, newBox: { x: number, y: number, width: number, height: number }): WidgetPosition[] => {
+    const collisions: WidgetPosition[] = [];
     
-    // Create a queue for widgets that need to be moved
-    let widgetsToMove: Array<{id: string, widget: WidgetPosition}> = [];
-    
-    // Check if the moving widget collides with any others
-    for (const [widgetId, widget] of widgetsRef.current.entries()) {
-      if (widgetId === movingWidgetId) continue;
+    for (const [id, widget] of widgetsRef.current.entries()) {
+      if (id === widgetId) continue;
       
-      // Check for collision
-      const hasCollision = !(
-        proposedPosition.x >= widget.x + widget.width ||
-        proposedPosition.x + proposedPosition.width <= widget.x ||
-        proposedPosition.y >= widget.y + widget.height ||
-        proposedPosition.y + proposedPosition.height <= widget.y
-      );
-      
-      if (hasCollision) {
-        widgetsToMove.push({id: widgetId, widget});
+      // Check if the boxes overlap
+      if (!(
+        newBox.x >= widget.x + widget.width ||
+        newBox.x + newBox.width <= widget.x ||
+        newBox.y >= widget.y + widget.height ||
+        newBox.y + newBox.height <= widget.y
+      )) {
+        collisions.push(widget);
       }
     }
     
-    // Process each colliding widget
-    while (widgetsToMove.length > 0) {
-      const {id: targetId, widget: targetWidget} = widgetsToMove.shift()!;
+    return collisions;
+  }, []);
+
+  // Calculate the direction to push a widget
+  const calculatePushDirection = useCallback((movingWidget: { x: number, y: number, width: number, height: number }, targetWidget: WidgetPosition) => {
+    // Calculate overlap in each direction
+    const overlapRight = movingWidget.x + movingWidget.width - targetWidget.x;
+    const overlapLeft = targetWidget.x + targetWidget.width - movingWidget.x;
+    const overlapBottom = movingWidget.y + movingWidget.height - targetWidget.y;
+    const overlapTop = targetWidget.y + targetWidget.height - movingWidget.y;
+    
+    // Find the smallest overlap
+    const minOverlap = Math.min(overlapRight, overlapLeft, overlapBottom, overlapTop);
+    
+    if (minOverlap === overlapRight) return { dx: overlapRight, dy: 0 };
+    if (minOverlap === overlapLeft) return { dx: -overlapLeft, dy: 0 };
+    if (minOverlap === overlapBottom) return { dx: 0, dy: overlapBottom };
+    return { dx: 0, dy: -overlapTop };
+  }, []);
+
+  // Push all affected widgets
+  const pushAffectedWidgets = useCallback((widgetsToPush: Map<string, { dx: number, dy: number }>) => {
+    // Process all pushes at once
+    setWidgets(prev => {
+      const newWidgets = new Map(prev);
       
-      // Skip if already moved
-      if (movedWidgetIds.has(targetId)) continue;
-      
-      // Mark as moved
-      movedWidgetIds.add(targetId);
-      
-      // Calculate the minimum movement needed in each direction
-      const pushRight = proposedPosition.x + proposedPosition.width - targetWidget.x + 10;
-      const pushLeft = targetWidget.x + targetWidget.width - proposedPosition.x + 10;
-      const pushDown = proposedPosition.y + proposedPosition.height - targetWidget.y + 10;
-      const pushUp = targetWidget.y + targetWidget.height - proposedPosition.y + 10;
-      
-      // Find the smallest push distance
-      const minPush = Math.min(pushRight, pushLeft, pushDown, pushUp);
-      
-      // Create new position based on minimal push
-      let newPosition: WidgetPosition;
-      
-      if (minPush === pushRight) {
-        // Push right
-        newPosition = { ...targetWidget, x: targetWidget.x + pushRight };
-      } else if (minPush === pushLeft) {
-        // Push left
-        newPosition = { ...targetWidget, x: targetWidget.x - pushLeft };
-      } else if (minPush === pushDown) {
-        // Push down
-        newPosition = { ...targetWidget, y: targetWidget.y + pushDown };
-      } else {
-        // Push up
-        newPosition = { ...targetWidget, y: targetWidget.y - pushUp };
-      }
-      
-      // Ensure the widget stays in view (non-negative position)
-      newPosition.x = Math.max(0, newPosition.x);
-      newPosition.y = Math.max(0, newPosition.y);
-      
-      // Update the widget position
-      updateWidget(targetId, newPosition);
-      
-      // Check if this newly positioned widget now collides with others
-      for (const [widgetId, widget] of widgetsRef.current.entries()) {
-        if (widgetId === movingWidgetId || widgetId === targetId || movedWidgetIds.has(widgetId)) continue;
-        
-        // Check for collision with the newly positioned widget
-        const hasCollision = !(
-          newPosition.x >= widget.x + widget.width ||
-          newPosition.x + newPosition.width <= widget.x ||
-          newPosition.y >= widget.y + widget.height ||
-          newPosition.y + newPosition.height <= widget.y
-        );
-        
-        if (hasCollision) {
-          widgetsToMove.push({id: widgetId, widget});
+      for (const [id, push] of widgetsToPush.entries()) {
+        const widget = newWidgets.get(id);
+        if (widget) {
+          newWidgets.set(id, {
+            ...widget,
+            x: Math.max(0, widget.x + push.dx),
+            y: Math.max(0, widget.y + push.dy)
+          });
         }
       }
+      
+      return newWidgets;
+    });
+  }, []);
+
+  // Move a widget and push others out of the way
+  const moveWidget = useCallback((widgetId: string, newX: number, newY: number) => {
+    const widget = widgetsRef.current.get(widgetId);
+    if (!widget) return;
+    
+    // Snap to grid
+    const snapped = getSnappedPosition(newX, newY);
+    
+    // First, update the position of the moving widget
+    const updatedWidget = { ...widget, x: snapped.x, y: snapped.y };
+    
+    // Update widget immediately
+    updateWidget(widgetId, { x: snapped.x, y: snapped.y });
+    
+    // Check for collisions
+    const collisions = checkCollision(widgetId, updatedWidget);
+    
+    if (collisions.length > 0) {
+      // Prepare a map of all widgets to push
+      const widgetsToPush = new Map<string, { dx: number, dy: number }>();
+      const processedWidgets = new Set<string>([widgetId]);
+      
+      // Process widgets in queue to handle cascading pushes
+      const pushQueue = [...collisions];
+      
+      while (pushQueue.length > 0) {
+        const targetWidget = pushQueue.shift()!;
+        if (processedWidgets.has(targetWidget.id)) continue;
+        
+        processedWidgets.add(targetWidget.id);
+        
+        // Calculate how to push this widget
+        const movingBox = widgetsRef.current.get(widgetId) || updatedWidget;
+        const pushDirection = calculatePushDirection(movingBox, targetWidget);
+        
+        // Adjust push direction if needed to avoid negative positions
+        const finalPush = {
+          dx: targetWidget.x + pushDirection.dx < 0 ? -targetWidget.x : pushDirection.dx,
+          dy: targetWidget.y + pushDirection.dy < 0 ? -targetWidget.y : pushDirection.dy
+        };
+        
+        // Store the push
+        widgetsToPush.set(targetWidget.id, finalPush);
+        
+        // Check if this push creates new collisions
+        const pushedTargetPosition = {
+          x: targetWidget.x + finalPush.dx,
+          y: targetWidget.y + finalPush.dy,
+          width: targetWidget.width,
+          height: targetWidget.height
+        };
+        
+        const secondaryCollisions = checkCollision(targetWidget.id, pushedTargetPosition);
+        
+        // Add any new collisions to the queue
+        for (const collision of secondaryCollisions) {
+          if (!processedWidgets.has(collision.id)) {
+            pushQueue.push(collision);
+          }
+        }
+      }
+      
+      // Apply all pushes at once
+      if (widgetsToPush.size > 0) {
+        pushAffectedWidgets(widgetsToPush);
+      }
     }
-  }, [updateWidget]);
+  }, [getSnappedPosition, updateWidget, checkCollision, calculatePushDirection, pushAffectedWidgets]);
+
+  // Resize a widget and push others out of the way
+  const resizeWidget = useCallback((widgetId: string, newWidth: number, newHeight: number) => {
+    const widget = widgetsRef.current.get(widgetId);
+    if (!widget) return;
+    
+    // Snap to grid
+    const snapped = getSnappedSize(newWidth, newHeight);
+    
+    // Enforce minimum and maximum sizes
+    const finalWidth = Math.max(100, Math.min(1200, snapped.width));
+    const finalHeight = Math.max(100, Math.min(800, snapped.height));
+    
+    // First, update the size of the resizing widget
+    const updatedWidget = { ...widget, width: finalWidth, height: finalHeight };
+    
+    // Update widget immediately
+    updateWidget(widgetId, { width: finalWidth, height: finalHeight });
+    
+    // Check for collisions
+    const collisions = checkCollision(widgetId, updatedWidget);
+    
+    if (collisions.length > 0) {
+      // Prepare a map of all widgets to push
+      const widgetsToPush = new Map<string, { dx: number, dy: number }>();
+      const processedWidgets = new Set<string>([widgetId]);
+      
+      // Process widgets in queue to handle cascading pushes
+      const pushQueue = [...collisions];
+      
+      while (pushQueue.length > 0) {
+        const targetWidget = pushQueue.shift()!;
+        if (processedWidgets.has(targetWidget.id)) continue;
+        
+        processedWidgets.add(targetWidget.id);
+        
+        // Calculate how to push this widget
+        const movingBox = widgetsRef.current.get(widgetId) || updatedWidget;
+        const pushDirection = calculatePushDirection(movingBox, targetWidget);
+        
+        // Adjust push direction if needed to avoid negative positions
+        const finalPush = {
+          dx: targetWidget.x + pushDirection.dx < 0 ? -targetWidget.x : pushDirection.dx,
+          dy: targetWidget.y + pushDirection.dy < 0 ? -targetWidget.y : pushDirection.dy
+        };
+        
+        // Store the push
+        widgetsToPush.set(targetWidget.id, finalPush);
+        
+        // Check if this push creates new collisions
+        const pushedTargetPosition = {
+          x: targetWidget.x + finalPush.dx,
+          y: targetWidget.y + finalPush.dy,
+          width: targetWidget.width,
+          height: targetWidget.height
+        };
+        
+        const secondaryCollisions = checkCollision(targetWidget.id, pushedTargetPosition);
+        
+        // Add any new collisions to the queue
+        for (const collision of secondaryCollisions) {
+          if (!processedWidgets.has(collision.id)) {
+            pushQueue.push(collision);
+          }
+        }
+      }
+      
+      // Apply all pushes at once
+      if (widgetsToPush.size > 0) {
+        pushAffectedWidgets(widgetsToPush);
+      }
+    }
+  }, [getSnappedSize, updateWidget, checkCollision, calculatePushDirection, pushAffectedWidgets]);
 
   const value = {
     widgets,
     registerWidget,
     updateWidget,
     removeWidget,
-    checkCollision,
-    preventOverlap,
+    moveWidget,
+    resizeWidget,
     getSnappedPosition,
-    pushWidgets,
+    getSnappedSize,
     gridSize
   };
 
