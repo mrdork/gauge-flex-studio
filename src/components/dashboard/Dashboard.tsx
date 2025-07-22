@@ -6,7 +6,7 @@ import { TableWidget } from './TableWidget';
 import { N8nConfigModal } from './N8nConfigModal';
 import { useDashboardData } from '@/hooks/useDashboardData';
 import { Button } from '@/components/ui/button';
-import { Settings, RotateCcw } from 'lucide-react';
+import { Settings, RotateCcw, Maximize, Minimize } from 'lucide-react';
 import { useToast } from '@/components/ui/use-toast';
 
 // Define initial widget layouts - ensuring no overlaps
@@ -82,6 +82,8 @@ export const Dashboard: React.FC = () => {
 
   const [widgets, setWidgets] = useState(() => fixInitialOverlaps(initialWidgets));
   const [configModalOpen, setConfigModalOpen] = useState(false);
+  const [isFullscreen, setIsFullscreen] = useState(false);
+  const [wakeLock, setWakeLock] = useState<WakeLockSentinel | null>(null);
   const [n8nUrl, setN8nUrl] = useState<string>(() => {
     // Load from localStorage on initial render
     if (typeof window !== 'undefined') {
@@ -100,6 +102,28 @@ export const Dashboard: React.FC = () => {
     }
   }, [n8nUrl]);
 
+  // Handle fullscreen changes and wake lock
+  useEffect(() => {
+    const handleFullscreenChange = () => {
+      setIsFullscreen(!!document.fullscreenElement);
+      
+      if (!document.fullscreenElement && wakeLock) {
+        // Exit fullscreen - release wake lock
+        wakeLock.release();
+        setWakeLock(null);
+      }
+    };
+
+    document.addEventListener('fullscreenchange', handleFullscreenChange);
+    
+    return () => {
+      document.removeEventListener('fullscreenchange', handleFullscreenChange);
+      if (wakeLock) {
+        wakeLock.release();
+      }
+    };
+  }, [wakeLock]);
+
   // Handle n8n config save
   const handleSaveConfig = (url: string) => {
     setN8nUrl(url);
@@ -116,6 +140,47 @@ export const Dashboard: React.FC = () => {
       title: "Refreshing Data",
       description: "Fetching latest data from n8n...",
     });
+  };
+
+  // Handle fullscreen toggle
+  const handleFullscreenToggle = async () => {
+    try {
+      if (!isFullscreen) {
+        // Enter fullscreen
+        await document.documentElement.requestFullscreen();
+        
+        // Request wake lock to prevent screen from sleeping
+        if ('wakeLock' in navigator) {
+          const lock = await navigator.wakeLock.request('screen');
+          setWakeLock(lock);
+          
+          toast({
+            title: "Fullscreen Activated",
+            description: "Dashboard is now fullscreen with screen wake lock enabled.",
+          });
+        } else {
+          toast({
+            title: "Fullscreen Activated",
+            description: "Dashboard is now fullscreen. Wake lock not supported in this browser.",
+          });
+        }
+      } else {
+        // Exit fullscreen
+        await document.exitFullscreen();
+        
+        toast({
+          title: "Fullscreen Deactivated",
+          description: "Dashboard returned to normal view.",
+        });
+      }
+    } catch (error) {
+      console.error('Error toggling fullscreen:', error);
+      toast({
+        title: "Fullscreen Error",
+        description: "Unable to toggle fullscreen mode.",
+        variant: "destructive"
+      });
+    }
   };
 
   // Reset widgets to fit on screen optimally
@@ -349,6 +414,10 @@ export const Dashboard: React.FC = () => {
           </p>
         </div>
         <div className="flex gap-2">
+          <Button variant="outline" size="sm" onClick={handleFullscreenToggle}>
+            {isFullscreen ? <Minimize className="h-4 w-4 mr-1" /> : <Maximize className="h-4 w-4 mr-1" />}
+            {isFullscreen ? 'Exit Fullscreen' : 'Fullscreen'}
+          </Button>
           <Button variant="outline" size="sm" onClick={handleResetLayout}>
             <RotateCcw className="h-4 w-4 mr-1" />
             Reset Layout
