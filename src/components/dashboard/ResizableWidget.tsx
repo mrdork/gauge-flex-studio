@@ -30,7 +30,7 @@ export const ResizableWidget: React.FC<ResizableWidgetProps> = ({
   className
 }) => {
   const widgetId = useRef(`widget-${Math.random().toString(36).substr(2, 9)}`).current;
-  const { registerWidget, updateWidget, removeWidget, checkCollision, getSnappedPosition, pushWidgets } = useGridLayout();
+  const { registerWidget, updateWidget, removeWidget, checkCollision, getSnappedPosition, pushWidgets, preventOverlap } = useGridLayout();
   
   const [position, setPosition] = useState({ x: initialX, y: initialY, width: initialWidth, height: initialHeight });
   const [isResizing, setIsResizing] = useState(false);
@@ -76,17 +76,13 @@ export const ResizableWidget: React.FC<ResizableWidgetProps> = ({
       if (snapped.x !== undefined) newX = snapped.x;
       if (snapped.y !== undefined) newY = snapped.y;
 
-      // Check for collision at the snapped position
-      const collidingWidgets = checkCollision(widgetId, { x: newX, y: newY });
+      // Prevent overlapping with other widgets
+      const nonOverlappingPosition = preventOverlap(widgetId, { x: newX, y: newY });
+      if (nonOverlappingPosition.x !== undefined) newX = nonOverlappingPosition.x;
+      if (nonOverlappingPosition.y !== undefined) newY = nonOverlappingPosition.y;
       
-      // Update position immediately
-      const newPosition = { ...position, x: newX, y: newY };
-      setPosition(newPosition);
-      
-      // If there are collisions, push them away
-      if (collidingWidgets) {
-        pushWidgets(widgetId, { ...newPosition, id: widgetId });
-      }
+      // Update position
+      setPosition(prev => ({ ...prev, x: newX, y: newY }));
     };
 
     const handleDragUp = () => {
@@ -98,7 +94,7 @@ export const ResizableWidget: React.FC<ResizableWidgetProps> = ({
 
     document.addEventListener('mousemove', handleDragMove);
     document.addEventListener('mouseup', handleDragUp);
-  }, [position, widgetId, getSnappedPosition, checkCollision, pushWidgets]);
+  }, [position, widgetId, getSnappedPosition, preventOverlap]);
 
   const handleResizeMouseDown = useCallback((e: React.MouseEvent) => {
     e.preventDefault();
@@ -126,17 +122,13 @@ export const ResizableWidget: React.FC<ResizableWidgetProps> = ({
       if (snapped.width !== undefined) newWidth = snapped.width;
       if (snapped.height !== undefined) newHeight = snapped.height;
 
-      // Check for collision with new size
-      const collidingWidgets = checkCollision(widgetId, { width: newWidth, height: newHeight });
+      // Prevent overlapping with other widgets
+      const nonOverlappingPosition = preventOverlap(widgetId, { width: newWidth, height: newHeight });
+      if (nonOverlappingPosition.width !== undefined) newWidth = nonOverlappingPosition.width;
+      if (nonOverlappingPosition.height !== undefined) newHeight = nonOverlappingPosition.height;
       
-      // Update size immediately
-      const newPosition = { ...position, width: newWidth, height: newHeight };
-      setPosition(newPosition);
-      
-      // If there are collisions, push them away
-      if (collidingWidgets) {
-        pushWidgets(widgetId, { ...newPosition, id: widgetId });
-      }
+      // Update size
+      setPosition(prev => ({ ...prev, width: newWidth, height: newHeight }));
     };
 
     const handleResizeUp = () => {
@@ -148,7 +140,7 @@ export const ResizableWidget: React.FC<ResizableWidgetProps> = ({
 
     document.addEventListener('mousemove', handleResizeMove);
     document.addEventListener('mouseup', handleResizeUp);
-  }, [position, minWidth, minHeight, maxWidth, maxHeight, widgetId, getSnappedPosition, checkCollision, pushWidgets]);
+  }, [position, minWidth, minHeight, maxWidth, maxHeight, widgetId, getSnappedPosition, preventOverlap]);
 
   return (
     <div

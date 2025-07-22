@@ -14,6 +14,7 @@ interface GridLayoutContextType {
   updateWidget: (id: string, position: Partial<WidgetPosition>) => void;
   removeWidget: (id: string) => void;
   checkCollision: (id: string, newPosition: Partial<WidgetPosition>) => WidgetPosition[] | null;
+  preventOverlap: (id: string, proposedPosition: Partial<WidgetPosition>) => Partial<WidgetPosition>;
   getSnappedPosition: (id: string, position: Partial<WidgetPosition>) => Partial<WidgetPosition>;
   pushWidgets: (movingWidgetId: string, newPosition: WidgetPosition) => void;
   gridSize: number;
@@ -74,7 +75,7 @@ export const GridLayoutProvider: React.FC<GridLayoutProviderProps> = ({
       return newWidgets;
     });
   }, []);
-
+  
   const checkCollision = useCallback((id: string, newPosition: Partial<WidgetPosition>): WidgetPosition[] | null => {
     const current = widgetsRef.current.get(id);
     if (!current) return null;
@@ -99,6 +100,53 @@ export const GridLayoutProvider: React.FC<GridLayoutProviderProps> = ({
     }
 
     return collidingWidgets.length > 0 ? collidingWidgets : null;
+  }, []);
+
+  const preventOverlap = useCallback((id: string, proposedPosition: Partial<WidgetPosition>): Partial<WidgetPosition> => {
+    const current = widgetsRef.current.get(id);
+    if (!current) return proposedPosition;
+
+    const proposed = { ...current, ...proposedPosition };
+    let adjustedPosition = { ...proposedPosition };
+    let needsAdjustment = false;
+
+    // Check for collisions with other widgets
+    for (const [widgetId, widget] of widgetsRef.current) {
+      if (widgetId === id) continue;
+
+      const hasCollision = !(
+        proposed.x >= widget.x + widget.width ||
+        proposed.x + proposed.width <= widget.x ||
+        proposed.y >= widget.y + widget.height ||
+        proposed.y + proposed.height <= widget.y
+      );
+
+      if (hasCollision) {
+        needsAdjustment = true;
+        
+        // Calculate the minimum adjustments needed in each direction
+        const adjustRight = widget.x + widget.width - proposed.x;
+        const adjustLeft = proposed.x + proposed.width - widget.x;
+        const adjustDown = widget.y + widget.height - proposed.y;
+        const adjustUp = proposed.y + proposed.height - widget.y;
+        
+        // Find the smallest adjustment needed
+        const minAdjustment = Math.min(adjustRight, adjustLeft, adjustDown, adjustUp);
+        
+        // Apply the minimum adjustment to prevent overlap
+        if (minAdjustment === adjustRight && 'x' in adjustedPosition) {
+          adjustedPosition.x = widget.x + widget.width + 1; // Push right
+        } else if (minAdjustment === adjustLeft && 'x' in adjustedPosition) {
+          adjustedPosition.x = widget.x - proposed.width - 1; // Push left
+        } else if (minAdjustment === adjustDown && 'y' in adjustedPosition) {
+          adjustedPosition.y = widget.y + widget.height + 1; // Push down
+        } else if (minAdjustment === adjustUp && 'y' in adjustedPosition) {
+          adjustedPosition.y = widget.y - proposed.height - 1; // Push up
+        }
+      }
+    }
+
+    return needsAdjustment ? adjustedPosition : proposedPosition;
   }, []);
 
   const snapToGrid = useCallback((value: number): number => {
@@ -255,6 +303,7 @@ export const GridLayoutProvider: React.FC<GridLayoutProviderProps> = ({
     updateWidget,
     removeWidget,
     checkCollision,
+    preventOverlap,
     getSnappedPosition,
     pushWidgets,
     gridSize
