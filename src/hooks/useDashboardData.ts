@@ -124,6 +124,14 @@ function mapN8nData(n8nData: any): DashboardData {
   const mappedData = { ...defaultData };
   
   try {
+    console.log("Raw n8n data received:", n8nData);
+    
+    // Check if n8n returned just a workflow start message
+    if (n8nData.message === "Workflow was started") {
+      console.log("n8n workflow started but no data returned yet. Using default data.");
+      return defaultData;
+    }
+    
     // Example mapping - adjust according to your n8n data structure
     if (n8nData.metrics) {
       mappedData.metrics = {
@@ -143,6 +151,7 @@ function mapN8nData(n8nData: any): DashboardData {
       mappedData.tables.recentTickets = n8nData.tables.recentTickets;
     }
     
+    console.log("Mapped dashboard data:", mappedData);
     return mappedData;
   } catch (error) {
     console.error("Error mapping n8n data:", error);
