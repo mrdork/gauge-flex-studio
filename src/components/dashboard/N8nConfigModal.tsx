@@ -3,27 +3,31 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Label } from '@/components/ui/label';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { AlertCircle, Check } from 'lucide-react';
 
 interface N8nConfigModalProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
-  onSave: (url: string) => void;
+  onSave: (url: string, refreshInterval: number) => void;
   currentUrl: string;
+  currentRefreshInterval: number;
 }
 
 export const N8nConfigModal: React.FC<N8nConfigModalProps> = ({
   open,
   onOpenChange,
   onSave,
-  currentUrl
+  currentUrl,
+  currentRefreshInterval
 }) => {
   const [url, setUrl] = useState(currentUrl || '');
+  const [refreshInterval, setRefreshInterval] = useState(currentRefreshInterval.toString());
   const [testStatus, setTestStatus] = useState<'idle' | 'loading' | 'success' | 'error'>('idle');
   const [testMessage, setTestMessage] = useState('');
 
   const handleSave = () => {
-    onSave(url);
+    onSave(url, parseInt(refreshInterval));
     onOpenChange(false);
   };
 
@@ -78,6 +82,23 @@ export const N8nConfigModal: React.FC<N8nConfigModalProps> = ({
             />
             <p className="text-sm text-muted-foreground">
               This should be a GET webhook endpoint from your n8n workflow that returns JSON data.
+            </p>
+          </div>
+          
+          <div className="grid gap-2">
+            <Label htmlFor="refresh-interval">Auto-refresh Interval</Label>
+            <Select value={refreshInterval} onValueChange={setRefreshInterval}>
+              <SelectTrigger className="w-full">
+                <SelectValue placeholder="Select refresh interval" />
+              </SelectTrigger>
+              <SelectContent className="bg-background border border-border">
+                <SelectItem value="60000">1 Min</SelectItem>
+                <SelectItem value="180000">3 Min</SelectItem>
+                <SelectItem value="300000">5 Min</SelectItem>
+              </SelectContent>
+            </Select>
+            <p className="text-sm text-muted-foreground">
+              How often to automatically refresh data from n8n.
             </p>
           </div>
           

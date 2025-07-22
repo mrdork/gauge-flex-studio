@@ -56,8 +56,9 @@ const calculatePush = (mover: any, target: any) => {
   return { x: target.x, y: target.y - mover.height };
 };
 
-// Local storage key for the n8n webhook URL
+// Local storage keys
 const N8N_URL_KEY = 'tech-dashboard-n8n-url';
+const REFRESH_INTERVAL_KEY = 'tech-dashboard-refresh-interval';
 
 export const Dashboard: React.FC = () => {
   // Check for initial overlaps and fix them
@@ -91,16 +92,27 @@ export const Dashboard: React.FC = () => {
     }
     return '';
   });
+  const [refreshInterval, setRefreshInterval] = useState<number>(() => {
+    // Load from localStorage on initial render
+    if (typeof window !== 'undefined') {
+      return parseInt(localStorage.getItem(REFRESH_INTERVAL_KEY) || '300000'); // Default to 5 minutes
+    }
+    return 300000;
+  });
   
   const { data, isLoading, error, refreshData } = useDashboardData(n8nUrl);
   const { toast } = useToast();
 
-  // Save n8n URL to localStorage when it changes
+  // Save n8n URL and refresh interval to localStorage when they change
   useEffect(() => {
     if (n8nUrl) {
       localStorage.setItem(N8N_URL_KEY, n8nUrl);
     }
   }, [n8nUrl]);
+
+  useEffect(() => {
+    localStorage.setItem(REFRESH_INTERVAL_KEY, refreshInterval.toString());
+  }, [refreshInterval]);
 
   // Handle fullscreen changes and wake lock
   useEffect(() => {
@@ -124,12 +136,24 @@ export const Dashboard: React.FC = () => {
     };
   }, [wakeLock]);
 
+  // Auto-refresh data based on selected interval
+  useEffect(() => {
+    if (!n8nUrl) return;
+
+    const interval = setInterval(() => {
+      refreshData();
+    }, refreshInterval);
+
+    return () => clearInterval(interval);
+  }, [n8nUrl, refreshInterval, refreshData]);
+
   // Handle n8n config save
-  const handleSaveConfig = (url: string) => {
+  const handleSaveConfig = (url: string, interval: number) => {
     setN8nUrl(url);
+    setRefreshInterval(interval);
     toast({
       title: "Configuration Saved",
-      description: "The n8n webhook URL has been saved.",
+      description: "The n8n webhook URL and refresh interval have been saved.",
     });
   };
 
@@ -474,6 +498,7 @@ export const Dashboard: React.FC = () => {
         onOpenChange={setConfigModalOpen}
         onSave={handleSaveConfig}
         currentUrl={n8nUrl}
+        currentRefreshInterval={refreshInterval}
       />
     </div>
   );
