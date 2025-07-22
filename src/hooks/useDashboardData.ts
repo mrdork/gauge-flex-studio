@@ -113,10 +113,10 @@ export function useDashboardData(n8nWebhookUrl?: string) {
     if (n8nWebhookUrl) {
       fetchData();
       
-      // Set up auto-refresh every 30 seconds (optional)
+      // Set up auto-refresh every 2 minutes to reduce load
       const interval = setInterval(() => {
         fetchData();
-      }, 30000);
+      }, 120000);
       
       return () => clearInterval(interval);
     }
