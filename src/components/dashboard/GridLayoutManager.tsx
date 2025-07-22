@@ -16,6 +16,7 @@ interface GridLayoutContextType {
   checkCollision: (id: string, newPosition: Partial<WidgetPosition>) => WidgetPosition[] | null;
   preventOverlap: (id: string, proposedPosition: Partial<WidgetPosition>) => Partial<WidgetPosition> | null;
   getSnappedPosition: (id: string, position: Partial<WidgetPosition>) => Partial<WidgetPosition>;
+  pushWidgets: (movingWidgetId: string, proposedPosition: WidgetPosition) => void;
   gridSize: number;
 }
 
@@ -185,6 +186,93 @@ export const GridLayoutProvider: React.FC<GridLayoutProviderProps> = ({
     };
   }, [snapThreshold, snapToGrid]);
 
+  // Push other widgets out of the way when a collision occurs
+  const pushWidgets = useCallback((movingWidgetId: string, proposedPosition: WidgetPosition) => {
+    // Keep track of widgets that have been moved
+    const movedWidgetIds = new Set<string>([movingWidgetId]);
+    
+    // Create a queue for widgets that need to be moved
+    let widgetsToMove: Array<{id: string, widget: WidgetPosition}> = [];
+    
+    // Check if the moving widget collides with any others
+    for (const [widgetId, widget] of widgetsRef.current.entries()) {
+      if (widgetId === movingWidgetId) continue;
+      
+      // Check for collision
+      const hasCollision = !(
+        proposedPosition.x >= widget.x + widget.width ||
+        proposedPosition.x + proposedPosition.width <= widget.x ||
+        proposedPosition.y >= widget.y + widget.height ||
+        proposedPosition.y + proposedPosition.height <= widget.y
+      );
+      
+      if (hasCollision) {
+        widgetsToMove.push({id: widgetId, widget});
+      }
+    }
+    
+    // Process each colliding widget
+    while (widgetsToMove.length > 0) {
+      const {id: targetId, widget: targetWidget} = widgetsToMove.shift()!;
+      
+      // Skip if already moved
+      if (movedWidgetIds.has(targetId)) continue;
+      
+      // Mark as moved
+      movedWidgetIds.add(targetId);
+      
+      // Calculate the minimum movement needed in each direction
+      const pushRight = proposedPosition.x + proposedPosition.width - targetWidget.x + 10;
+      const pushLeft = targetWidget.x + targetWidget.width - proposedPosition.x + 10;
+      const pushDown = proposedPosition.y + proposedPosition.height - targetWidget.y + 10;
+      const pushUp = targetWidget.y + targetWidget.height - proposedPosition.y + 10;
+      
+      // Find the smallest push distance
+      const minPush = Math.min(pushRight, pushLeft, pushDown, pushUp);
+      
+      // Create new position based on minimal push
+      let newPosition: WidgetPosition;
+      
+      if (minPush === pushRight) {
+        // Push right
+        newPosition = { ...targetWidget, x: targetWidget.x + pushRight };
+      } else if (minPush === pushLeft) {
+        // Push left
+        newPosition = { ...targetWidget, x: targetWidget.x - pushLeft };
+      } else if (minPush === pushDown) {
+        // Push down
+        newPosition = { ...targetWidget, y: targetWidget.y + pushDown };
+      } else {
+        // Push up
+        newPosition = { ...targetWidget, y: targetWidget.y - pushUp };
+      }
+      
+      // Ensure the widget stays in view (non-negative position)
+      newPosition.x = Math.max(0, newPosition.x);
+      newPosition.y = Math.max(0, newPosition.y);
+      
+      // Update the widget position
+      updateWidget(targetId, newPosition);
+      
+      // Check if this newly positioned widget now collides with others
+      for (const [widgetId, widget] of widgetsRef.current.entries()) {
+        if (widgetId === movingWidgetId || widgetId === targetId || movedWidgetIds.has(widgetId)) continue;
+        
+        // Check for collision with the newly positioned widget
+        const hasCollision = !(
+          newPosition.x >= widget.x + widget.width ||
+          newPosition.x + newPosition.width <= widget.x ||
+          newPosition.y >= widget.y + widget.height ||
+          newPosition.y + newPosition.height <= widget.y
+        );
+        
+        if (hasCollision) {
+          widgetsToMove.push({id: widgetId, widget});
+        }
+      }
+    }
+  }, [updateWidget]);
+
   const value = {
     widgets,
     registerWidget,
@@ -193,6 +281,7 @@ export const GridLayoutProvider: React.FC<GridLayoutProviderProps> = ({
     checkCollision,
     preventOverlap,
     getSnappedPosition,
+    pushWidgets,
     gridSize
   };
 

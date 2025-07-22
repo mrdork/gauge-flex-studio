@@ -44,7 +44,7 @@ export const Dashboard: React.FC = () => {
       <div className="min-h-screen bg-dashboard-grid p-6">
         <div className="mb-6">
           <h1 className="text-2xl font-bold text-foreground mb-2">Tech Dashboard</h1>
-          <p className="text-muted-foreground">Drag widgets to reposition • Resize by dragging the corner • Widgets never overlap each other</p>
+          <p className="text-muted-foreground">Drag widgets to reposition • Other widgets move out of the way automatically • Resize by dragging the corner</p>
         </div>
 
         <div className="relative w-full h-[calc(100vh-100px)] overflow-hidden">
