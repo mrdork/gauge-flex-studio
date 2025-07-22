@@ -78,6 +78,7 @@ export function useDashboardData(n8nWebhookUrl?: string) {
   const [data, setData] = useState<DashboardData>(defaultData);
   const [isLoading, setIsLoading] = useState<boolean>(false);
   const [error, setError] = useState<string | null>(null);
+  const [lastRefreshTime, setLastRefreshTime] = useState<Date | null>(null);
 
   const fetchData = async () => {
     if (!n8nWebhookUrl) {
@@ -101,6 +102,7 @@ export function useDashboardData(n8nWebhookUrl?: string) {
       const mappedData = mapN8nData(fetchedData);
       
       setData(mappedData);
+      setLastRefreshTime(new Date());
     } catch (err) {
       console.error("Error fetching data from n8n:", err);
       setError("Failed to load data from n8n webhook");
@@ -122,7 +124,7 @@ export function useDashboardData(n8nWebhookUrl?: string) {
     }
   }, [n8nWebhookUrl]);
 
-  return { data, setData, isLoading, error, refreshData: fetchData };
+  return { data, setData, isLoading, error, refreshData: fetchData, lastRefreshTime };
 }
 
 // Helper function to map n8n data to dashboard format

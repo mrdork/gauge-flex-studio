@@ -100,7 +100,7 @@ export const Dashboard: React.FC = () => {
     return 300000;
   });
   
-  const { data, isLoading, error, refreshData } = useDashboardData(n8nUrl);
+  const { data, isLoading, error, refreshData, lastRefreshTime } = useDashboardData(n8nUrl);
   const { toast } = useToast();
 
   // Save n8n URL and refresh interval to localStorage when they change
@@ -500,6 +500,13 @@ export const Dashboard: React.FC = () => {
         currentUrl={n8nUrl}
         currentRefreshInterval={refreshInterval}
       />
+
+      {/* Last refresh time - only show if there's new data and n8n is connected */}
+      {lastRefreshTime && n8nUrl && (
+        <div className="fixed bottom-2 left-1/2 transform -translate-x-1/2 text-xs text-muted-foreground">
+          Last updated: {lastRefreshTime.toLocaleString()}
+        </div>
+      )}
     </div>
   );
 };
