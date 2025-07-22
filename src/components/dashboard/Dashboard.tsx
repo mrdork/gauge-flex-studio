@@ -3,6 +3,7 @@ import { ResizableWidget } from './ResizableWidget';
 import { MetricWidget } from './MetricWidget';
 import { ChartWidget } from './ChartWidget';
 import { TableWidget } from './TableWidget';
+import { TimeWidget } from './TimeWidget';
 import { N8nConfigModal } from './N8nConfigModal';
 import { useDashboardData } from '@/hooks/useDashboardData';
 import { Button } from '@/components/ui/button';
@@ -15,6 +16,7 @@ const initialWidgets = [
   { id: 'open-tickets', title: 'Open Tickets', x: 290, y: 20, width: 250, height: 200 },
   { id: 'stale-tickets', title: 'Stale Tickets', x: 560, y: 20, width: 250, height: 200 },
   { id: 'overdue', title: 'Overdue', x: 830, y: 20, width: 250, height: 200 },
+  { id: 'current-time', title: 'Current Time (EST)', x: 1100, y: 20, width: 250, height: 160 },
   { id: 'tickets-by-company', title: 'Tickets By Company', x: 20, y: 240, width: 400, height: 300 },
   { id: 'worked-on-today', title: 'Worked On - Today', x: 440, y: 240, width: 300, height: 300 },
   { id: 'resolved-today', title: 'Resolved Today', x: 760, y: 240, width: 250, height: 200 },
@@ -422,6 +424,9 @@ export const Dashboard: React.FC = () => {
         
       case 'priority-distribution':
         return <ChartWidget type="pie" data={data.charts.priorityDistribution} />;
+        
+      case 'current-time':
+        return <TimeWidget />;
         
       default:
         return <div>Widget content</div>;
