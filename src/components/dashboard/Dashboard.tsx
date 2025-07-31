@@ -37,6 +37,20 @@ const REFRESH_INTERVAL_KEY = 'tech-dashboard-refresh-interval';
 const DashboardContent: React.FC = () => {
   const { widgets, registerWidget, moveWidget, resizeWidget } = useGridLayout();
   const [widgetLayout, setWidgetLayout] = useState(initialWidgets);
+
+  // Register all widgets with the grid layout manager on mount
+  useEffect(() => {
+    console.log('Registering widgets with GridLayoutManager:', widgetLayout);
+    widgetLayout.forEach(widget => {
+      registerWidget(widget.id, widget);
+    });
+  }, [registerWidget]);
+
+  // Debug: Log when widgets map changes
+  useEffect(() => {
+    console.log('GridLayoutManager widgets updated:', widgets);
+  }, [widgets]);
+
   const [configModalOpen, setConfigModalOpen] = useState(false);
   const [isFullscreen, setIsFullscreen] = useState(false);
   const [wakeLock, setWakeLock] = useState<WakeLockSentinel | null>(null);
@@ -54,13 +68,6 @@ const DashboardContent: React.FC = () => {
     }
     return 300000;
   });
-
-  // Register all widgets with the grid layout manager on mount
-  useEffect(() => {
-    widgetLayout.forEach(widget => {
-      registerWidget(widget.id, widget);
-    });
-  }, [registerWidget]);
   
   const { data, isLoading, error, refreshData, lastRefreshTime } = useDashboardData(n8nUrl);
   const { toast } = useToast();
@@ -211,11 +218,13 @@ const DashboardContent: React.FC = () => {
 
   // Handle widget movement using GridLayoutManager
   const handleWidgetMove = (id: string, x: number, y: number) => {
+    console.log('handleWidgetMove called:', { id, x, y });
     moveWidget(id, x, y);
   };
 
   // Handle widget resizing using GridLayoutManager
   const handleWidgetResize = (id: string, width: number, height: number) => {
+    console.log('handleWidgetResize called:', { id, width, height });
     resizeWidget(id, width, height);
   };
 
