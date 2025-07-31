@@ -5,6 +5,7 @@ import { ChartWidget } from './ChartWidget';
 import { TableWidget } from './TableWidget';
 import { TimeWidget } from './TimeWidget';
 import { N8nConfigModal } from './N8nConfigModal';
+import { GridLayoutProvider, useGridLayout } from './GridLayoutManager';
 import { useDashboardData } from '@/hooks/useDashboardData';
 import { Button } from '@/components/ui/button';
 import { Settings, RotateCcw, Maximize, Minimize } from 'lucide-react';
@@ -28,62 +29,14 @@ const initialWidgets = [
 // Grid size for snapping
 const GRID_SIZE = 20;
 
-// Helper to snap to grid
-const snapToGrid = (value: number) => Math.round(value / GRID_SIZE) * GRID_SIZE;
-
-// Check if two widgets overlap
-const checkOverlap = (a: any, b: any) => {
-  return !(
-    a.x >= b.x + b.width ||
-    a.x + a.width <= b.x ||
-    a.y >= b.y + b.height ||
-    a.y + a.height <= b.y
-  );
-};
-
-// Calculate direction to push widget
-const calculatePush = (mover: any, target: any) => {
-  // Calculate overlap in each direction
-  const right = mover.x + mover.width - target.x;
-  const left = target.x + target.width - mover.x;
-  const bottom = mover.y + mover.height - target.y;
-  const top = target.y + target.height - mover.y;
-  
-  // Find smallest push direction
-  const minPush = Math.min(right, left, bottom, top);
-  
-  if (minPush === right) return { x: target.x + right, y: target.y };
-  if (minPush === left) return { x: target.x - mover.width, y: target.y };
-  if (minPush === bottom) return { x: target.x, y: target.y + bottom };
-  return { x: target.x, y: target.y - mover.height };
-};
-
 // Local storage keys
 const N8N_URL_KEY = 'tech-dashboard-n8n-url';
 const REFRESH_INTERVAL_KEY = 'tech-dashboard-refresh-interval';
 
-export const Dashboard: React.FC = () => {
-  // Check for initial overlaps and fix them
-  const fixInitialOverlaps = (widgets: any[]) => {
-    const fixed = [...widgets];
-    
-    for (let i = 0; i < fixed.length; i++) {
-      for (let j = i + 1; j < fixed.length; j++) {
-        if (checkOverlap(fixed[i], fixed[j])) {
-          console.log(`Initial overlap detected between ${fixed[i].id} and ${fixed[j].id}`);
-          // Move the second widget to the right
-          fixed[j] = {
-            ...fixed[j],
-            x: fixed[i].x + fixed[i].width + 20
-          };
-        }
-      }
-    }
-    
-    return fixed;
-  };
-
-  const [widgets, setWidgets] = useState(() => fixInitialOverlaps(initialWidgets));
+// Dashboard content component that uses GridLayoutManager
+const DashboardContent: React.FC = () => {
+  const { widgets, registerWidget, moveWidget, resizeWidget } = useGridLayout();
+  const [widgetLayout, setWidgetLayout] = useState(initialWidgets);
   const [configModalOpen, setConfigModalOpen] = useState(false);
   const [isFullscreen, setIsFullscreen] = useState(false);
   const [wakeLock, setWakeLock] = useState<WakeLockSentinel | null>(null);
@@ -101,6 +54,13 @@ export const Dashboard: React.FC = () => {
     }
     return 300000;
   });
+
+  // Register all widgets with the grid layout manager on mount
+  useEffect(() => {
+    widgetLayout.forEach(widget => {
+      registerWidget(widget.id, widget);
+    });
+  }, [registerWidget]);
   
   const { data, isLoading, error, refreshData, lastRefreshTime } = useDashboardData(n8nUrl);
   const { toast } = useToast();
@@ -216,29 +176,32 @@ export const Dashboard: React.FC = () => {
     
     // Calculate optimal grid layout
     const cols = 4;
-    const rows = Math.ceil(widgets.length / cols);
+    const rows = Math.ceil(widgetLayout.length / cols);
     
     const cellWidth = Math.floor((containerWidth - (cols - 1) * 20) / cols); // 20px gap between widgets
     const cellHeight = Math.floor((containerHeight - (rows - 1) * 20) / rows);
     
     // Snap to grid
-    const snappedCellWidth = snapToGrid(Math.max(200, cellWidth));
-    const snappedCellHeight = snapToGrid(Math.max(150, cellHeight));
+    const snappedCellWidth = Math.max(200, Math.round(cellWidth / GRID_SIZE) * GRID_SIZE);
+    const snappedCellHeight = Math.max(150, Math.round(cellHeight / GRID_SIZE) * GRID_SIZE);
     
-    const resetWidgets = widgets.map((widget, index) => {
+    const resetWidgets = widgetLayout.map((widget, index) => {
       const row = Math.floor(index / cols);
       const col = index % cols;
       
-      return {
+      const newWidget = {
         ...widget,
-        x: snapToGrid(20 + col * (snappedCellWidth + 20)),
-        y: snapToGrid(20 + row * (snappedCellHeight + 20)),
+        x: 20 + col * (snappedCellWidth + 20),
+        y: 20 + row * (snappedCellHeight + 20),
         width: snappedCellWidth,
         height: snappedCellHeight
       };
+      
+      registerWidget(widget.id, newWidget);
+      return newWidget;
     });
     
-    setWidgets(resetWidgets);
+    setWidgetLayout(resetWidgets);
     
     toast({
       title: "Layout Reset",
@@ -246,112 +209,14 @@ export const Dashboard: React.FC = () => {
     });
   };
 
-  // Handle widget movement
+  // Handle widget movement using GridLayoutManager
   const handleWidgetMove = (id: string, x: number, y: number) => {
-    const snappedX = snapToGrid(x);
-    const snappedY = snapToGrid(y);
-    
-    setWidgets(prev => {
-      // Create new array with the moved widget
-      const updated = prev.map(w => 
-        w.id === id ? { ...w, x: snappedX, y: snappedY } : w
-      );
-      
-      // Get the widget that moved
-      const movedWidget = updated.find(w => w.id === id);
-      if (!movedWidget) return prev;
-      
-      // Recursively resolve collisions
-      const resolveCollisions = (widgetId: string, visited = new Set<string>()) => {
-        if (visited.has(widgetId)) return;
-        visited.add(widgetId);
-        
-        const currentWidget = updated.find(w => w.id === widgetId);
-        if (!currentWidget) return;
-        
-        // Check for collisions with other widgets
-        for (const widget of updated) {
-          if (widget.id === widgetId || visited.has(widget.id)) continue;
-          
-          if (checkOverlap(currentWidget, widget)) {
-            // Calculate new position for collided widget
-            const newPos = calculatePush(currentWidget, widget);
-            
-            // Update position of collided widget
-            const index = updated.findIndex(w => w.id === widget.id);
-            if (index !== -1) {
-              updated[index] = { 
-                ...updated[index], 
-                x: Math.max(0, snapToGrid(newPos.x)),
-                y: Math.max(0, snapToGrid(newPos.y))
-              };
-              
-              // Check if this widget now collides with others
-              resolveCollisions(widget.id, visited);
-            }
-          }
-        }
-      };
-      
-      // Start collision resolution from the moved widget
-      resolveCollisions(id);
-      
-      return [...updated];
-    });
+    moveWidget(id, x, y);
   };
 
-  // Handle widget resizing
+  // Handle widget resizing using GridLayoutManager
   const handleWidgetResize = (id: string, width: number, height: number) => {
-    const snappedWidth = snapToGrid(width);
-    const snappedHeight = snapToGrid(height);
-    
-    setWidgets(prev => {
-      // Create new array with the resized widget
-      const updated = prev.map(w => 
-        w.id === id ? { ...w, width: snappedWidth, height: snappedHeight } : w
-      );
-      
-      // Get the widget that was resized
-      const resizedWidget = updated.find(w => w.id === id);
-      if (!resizedWidget) return prev;
-      
-      // Recursively resolve collisions
-      const resolveCollisions = (widgetId: string, visited = new Set<string>()) => {
-        if (visited.has(widgetId)) return;
-        visited.add(widgetId);
-        
-        const currentWidget = updated.find(w => w.id === widgetId);
-        if (!currentWidget) return;
-        
-        // Check for collisions with other widgets
-        for (const widget of updated) {
-          if (widget.id === widgetId || visited.has(widget.id)) continue;
-          
-          if (checkOverlap(currentWidget, widget)) {
-            // Calculate new position for collided widget
-            const newPos = calculatePush(currentWidget, widget);
-            
-            // Update position of collided widget
-            const index = updated.findIndex(w => w.id === widget.id);
-            if (index !== -1) {
-              updated[index] = { 
-                ...updated[index], 
-                x: Math.max(0, snapToGrid(newPos.x)),
-                y: Math.max(0, snapToGrid(newPos.y))
-              };
-              
-              // Check if this widget now collides with others
-              resolveCollisions(widget.id, visited);
-            }
-          }
-        }
-      };
-      
-      // Start collision resolution from the resized widget
-      resolveCollisions(id);
-      
-      return [...updated];
-    });
+    resizeWidget(id, width, height);
   };
 
   // Helper function to render a widget with the right content based on id
@@ -474,29 +339,39 @@ export const Dashboard: React.FC = () => {
       )}
 
       <div className="relative w-full h-[calc(100vh-140px)] overflow-hidden">
-        {widgets.map(widget => (
-          <ResizableWidget
-            key={widget.id}
-            id={widget.id}
-            title={widget.title}
-            initialX={widget.x}
-            initialY={widget.y}
-            initialWidth={widget.width}
-            initialHeight={widget.height}
-            gridSize={GRID_SIZE}
-            onMove={handleWidgetMove}
-            onResize={handleWidgetResize}
-          >
-            {isLoading ? (
-              <div className="h-full w-full flex items-center justify-center">
-                <div className="animate-spin h-6 w-6 border-2 border-current border-t-transparent rounded-full"></div>
-              </div>
-            ) : (
-              renderWidgetContent(widget.id)
-            )}
-          </ResizableWidget>
-        ))}
+        {widgetLayout.map(widget => {
+          const currentWidget = widgets.get(widget.id) || widget;
+          return (
+            <ResizableWidget
+              key={widget.id}
+              id={widget.id}
+              title={widget.title}
+              initialX={currentWidget.x}
+              initialY={currentWidget.y}
+              initialWidth={currentWidget.width}
+              initialHeight={currentWidget.height}
+              gridSize={GRID_SIZE}
+              onMove={handleWidgetMove}
+              onResize={handleWidgetResize}
+            >
+              {isLoading ? (
+                <div className="h-full w-full flex items-center justify-center">
+                  <div className="animate-spin h-6 w-6 border-2 border-current border-t-transparent rounded-full"></div>
+                </div>
+              ) : (
+                renderWidgetContent(widget.id)
+              )}
+            </ResizableWidget>
+          );
+        })}
       </div>
+
+      {/* Last refresh time - only show if there's new data and n8n is connected */}
+      {lastRefreshTime && n8nUrl && (
+        <div className="fixed bottom-2 left-1/2 transform -translate-x-1/2 text-[10px] text-muted-foreground/50">
+          Last updated: {lastRefreshTime.toLocaleString()}
+        </div>
+      )}
 
       <N8nConfigModal
         open={configModalOpen}
@@ -505,13 +380,15 @@ export const Dashboard: React.FC = () => {
         currentUrl={n8nUrl}
         currentRefreshInterval={refreshInterval}
       />
-
-      {/* Last refresh time - only show if there's new data and n8n is connected */}
-      {lastRefreshTime && n8nUrl && (
-        <div className="fixed bottom-2 left-1/2 transform -translate-x-1/2 text-[10px] text-muted-foreground/50">
-          Last updated: {lastRefreshTime.toLocaleString()}
-        </div>
-      )}
     </div>
+  );
+};
+
+// Main Dashboard component with GridLayoutProvider
+export const Dashboard: React.FC = () => {
+  return (
+    <GridLayoutProvider gridSize={GRID_SIZE}>
+      <DashboardContent />
+    </GridLayoutProvider>
   );
 };
